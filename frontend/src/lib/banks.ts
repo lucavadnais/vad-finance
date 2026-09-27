@@ -1,16 +1,13 @@
 import cibcLogo from '@/assets/banks/cibc.png';
 import nbcLogo from '@/assets/banks/nbc.png';
 
+export interface Bank {
+  name: string;
+  logo: string;
+}
+
 // Keyed by Account.bank
-export const BANKS = {
+export const BANKS: Record<string, Bank> = {
   cibc: { name: 'CIBC', logo: cibcLogo },
   nbc: { name: 'Banque Nationale', logo: nbcLogo },
-};
-
-export const ACCOUNT_TYPES = {
-  checking: 'Chèque',
-  savings: 'Épargne',
-  credit: 'Crédit',
-  investment: 'Placement',
-  cash: 'Comptant',
 };

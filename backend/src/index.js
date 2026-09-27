@@ -19,6 +19,10 @@ app.use((err, req, res, next) => {
   if (err.name === 'ValidationError' || err.name === 'CastError') {
     return res.status(400).json({ error: err.message });
   }
+  // Unique index violation (e.g. two categories with the same name)
+  if (err.code === 11000) {
+    return res.status(409).json({ error: `« ${Object.values(err.keyValue ?? {}).join(', ')} » existe déjà` });
+  }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });

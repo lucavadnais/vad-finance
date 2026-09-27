@@ -6,7 +6,7 @@ Application personnelle de gestion de finances, entièrement conteneurisée avec
 
 | Conteneur | Contenu                                                         | Port local   |
 | --------- | --------------------------------------------------------------- | ------------ |
-| `app`     | Frontend (Vue 3 + Vite, Tailwind v4, shadcn-vue) + backend (Node.js + Express 5) | 5173, 3000 |
+| `app`     | Frontend (Vue 3 + TypeScript + Vite, Tailwind v4, shadcn-vue) + backend (Node.js + Express 5) | 5173, 3000 |
 | `mongo`   | MongoDB 8 (via Mongoose)                                         | 27017        |
 
 Le conteneur `app` contient tout le projet (`/workspace`) et lance le frontend et le backend ensemble. Il sert aussi de Dev Container pour VS Code.
@@ -41,6 +41,7 @@ Dans le terminal du conteneur (`docker compose exec app bash` hors VS Code) :
 ```bash
 mongosh mongodb://mongo:27017/finance      # shell MongoDB
 cd frontend && npx shadcn-vue@latest add card  # ajouter un composant shadcn-vue
+cd frontend && npm run typecheck             # vérifier les types (aussi lancé par npm run build)
 cd backend && npm install <paquet>         # ajouter une dépendance
 ```
 
@@ -71,7 +72,9 @@ frontend/
   src/
     App.vue           # interface principale
     components/       # composants Vue (import CSV, formulaires…)
-    api.js            # client HTTP vers l'API
+    components/ui/    # composants shadcn-vue générés
+    api.ts            # client HTTP vers l'API
+    types.ts          # types des données renvoyées par l'API
 ```
 
 ## API

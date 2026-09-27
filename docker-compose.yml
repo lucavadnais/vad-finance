@@ -1,0 +1,51 @@
+name: finance
+
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    # No authentication: the port is bound to localhost only, so the DB
+    # is reachable from this machine (e.g. MongoDB Compass) but not the network
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Frontend + backend in a single container, also used as the VS Code dev container
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      MONGO_URL: mongodb://mongo:27017/finance
+      API_TARGET: http://localhost:3000
+      # Keep Claude Code settings and login in the claude-config volume
+      CLAUDE_CONFIG_DIR: /root/.claude
+    # Install/refresh dependencies on every start, then run both dev servers
+    command: sh -c "npm run setup && npm run dev"
+    ports:
+      - "5173:5173"
+      - "3000:3000"
+    volumes:
+      - .:/workspace
+      # Keep Linux node_modules inside Docker, separate from the Windows host
+      - root-modules:/workspace/node_modules
+      - backend-modules:/workspace/backend/node_modules
+      - frontend-modules:/workspace/frontend/node_modules
+      # Claude Code config and login, kept across container rebuilds
+      - claude-config:/root/.claude
+
+volumes:
+  mongo-data:
+  root-modules:
+  backend-modules:
+  frontend-modules:
+  claude-config:

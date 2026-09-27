@@ -1,0 +1,20 @@
+import path from 'node:path';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
+  },
+  server: {
+    host: true,
+    port: 5173,
+    // File watching through a Docker bind mount on Windows needs polling
+    watch: { usePolling: true },
+    proxy: {
+      '/api': process.env.API_TARGET || 'http://localhost:3000',
+    },
+  },
+});

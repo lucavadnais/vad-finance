@@ -6,7 +6,7 @@ Application personnelle de gestion de finances, entièrement conteneurisée avec
 
 | Conteneur | Contenu                                                         | Port local   |
 | --------- | --------------------------------------------------------------- | ------------ |
-| `app`     | Frontend (React + Vite, Tailwind v4, shadcn/ui) + backend (Node.js + Express 5) | 5173, 3000 |
+| `app`     | Frontend (Vue 3 + Vite, Tailwind v4, shadcn-vue) + backend (Node.js + Express 5) | 5173, 3000 |
 | `mongo`   | MongoDB 8 (via Mongoose)                                         | 27017        |
 
 Le conteneur `app` contient tout le projet (`/workspace`) et lance le frontend et le backend ensemble. Il sert aussi de Dev Container pour VS Code.
@@ -40,7 +40,7 @@ Dans le terminal du conteneur (`docker compose exec app bash` hors VS Code) :
 
 ```bash
 mongosh mongodb://mongo:27017/finance      # shell MongoDB
-cd frontend && npx shadcn@latest add card  # ajouter un composant shadcn/ui
+cd frontend && npx shadcn-vue@latest add card  # ajouter un composant shadcn-vue
 cd backend && npm install <paquet>         # ajouter une dépendance
 ```
 
@@ -53,7 +53,7 @@ docker compose down            # arrêter
 docker compose down -v         # arrêter ET effacer les données MongoDB
 ```
 
-Les composants shadcn/ui sont générés dans `frontend/src/components/ui/` et s'importent via l'alias `@` (`import { Button } from '@/components/ui/button'`).
+Les composants shadcn-vue sont générés dans `frontend/src/components/ui/` et s'importent via l'alias `@` (`import { Button } from '@/components/ui/button'`).
 
 ## Structure
 
@@ -69,7 +69,8 @@ backend/
     routes/           # routes REST /api/*
 frontend/
   src/
-    App.jsx           # interface principale
+    App.vue           # interface principale
+    components/       # composants Vue (import CSV, formulaires…)
     api.js            # client HTTP vers l'API
 ```
 

@@ -2,7 +2,9 @@ async function request(path, options = {}) {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    // Files (Blob) are sent as-is, everything else as JSON
+    body:
+      options.body instanceof Blob ? options.body : options.body ? JSON.stringify(options.body) : undefined,
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -17,6 +19,13 @@ export const api = {
   getTransactions: () => request('/transactions'),
   createTransaction: (body) => request('/transactions', { method: 'POST', body }),
   deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
+  parseTransactionsCsv: (file) =>
+    request(`/transactions/parse-csv?fileName=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv' },
+      body: file,
+    }),
+  importTransactions: (body) => request('/transactions/import', { method: 'POST', body }),
 };
 
 export function formatCents(cents, currency = 'CAD') {

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, formatCents, toCents } from './api.js';
+import CsvImport from './components/CsvImport.jsx';
+import { ACCOUNT_TYPES, BANKS } from './lib/banks.js';
 
 export default function App() {
   const [accounts, setAccounts] = useState([]);
@@ -32,13 +34,19 @@ export default function App() {
         <h2>Comptes — total {formatCents(totalCents)}</h2>
         <ul>
           {accounts.map((a) => (
-            <li key={a._id}>
-              <strong>{a.name}</strong> ({a.type}) : {formatCents(a.balanceCents, a.currency)}
+            <li key={a._id} className="flex items-center gap-2">
+              {BANKS[a.bank] && (
+                <img src={BANKS[a.bank].logo} alt={BANKS[a.bank].name} className="size-5 rounded" />
+              )}
+              <strong>{a.name}</strong> ({ACCOUNT_TYPES[a.type] ?? a.type}) :{' '}
+              {formatCents(a.balanceCents, a.currency)}
             </li>
           ))}
         </ul>
         <AccountForm onCreated={refresh} onError={setError} />
       </section>
+
+      <CsvImport accounts={accounts} onImported={refresh} />
 
       <section>
         <h2>Transactions</h2>

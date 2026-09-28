@@ -76,6 +76,52 @@ export async function linkTransfer(idA, idB) {
   ]);
 }
 
+// After an import, links new rows to the other side of their transfer when
+// that side is already in the app (same amount with the opposite sign, at most
+// MAX_DAYS_APART apart, neither side linked yet). Two cases:
+// - a new row marked as a transfer (it has a transferAccount) finds an
+//   uncategorized row in that account, not marked towards a third account;
+// - a new uncategorized row finds a row in another account already marked as
+//   a transfer towards this account (the other statement came first).
+// Closest date wins; each transaction is used once. Returns the pairs linked.
+export async function autoLinkTransfers(transactions) {
+  let linked = 0;
+  const used = new Set(transactions.map((t) => String(t._id)));
+  const around = (date) => ({
+    $gte: new Date(new Date(date).getTime() - MAX_DAYS_APART * DAY_MS),
+    $lte: new Date(new Date(date).getTime() + MAX_DAYS_APART * DAY_MS),
+  });
+
+  for (const t of transactions) {
+    if (t.transferPeer) continue;
+    const filter = t.transferAccount
+      ? {
+          account: t.transferAccount,
+          category: null,
+          transferAccount: { $in: [null, t.account] },
+        }
+      : t.category
+        ? null // an expense or income row is not a transfer
+        : { account: { $ne: t.account }, transferAccount: t.account };
+    if (!filter) continue;
+
+    const candidates = await Transaction.find({
+      ...filter,
+      amountCents: -t.amountCents,
+      transferPeer: null,
+      date: around(t.date),
+    }).lean();
+    const match = candidates
+      .filter((c) => !used.has(String(c._id)))
+      .sort((a, b) => Math.abs(a.date - t.date) - Math.abs(b.date - t.date))[0];
+    if (!match) continue;
+    used.add(String(match._id));
+    await linkTransfer(t._id, match._id);
+    linked++;
+  }
+  return linked;
+}
+
 // Creates both sides of a transfer at once (manual entry)
 export async function createTransfer({ from, to, date, description = '', amountCents }) {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {

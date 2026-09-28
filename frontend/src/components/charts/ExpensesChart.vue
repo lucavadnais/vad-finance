@@ -1,14 +1,17 @@
 <script setup lang="ts">
 // Spending per bucket (week or month), stacked by category
 import type { ChartConfig } from '@/components/ui/chart';
-import type { Row, Series } from '@/lib/chartData';
-import { computed } from 'vue';
+import type { ChartSelection, Row, Series } from '@/lib/chartData';
+import type { Transaction } from '@/types';
+import { computed, ref } from 'vue';
 import { StackedBar } from '@unovis/ts';
 import { VisAxis, VisStackedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
 import { formatCentsCompact } from '@/api';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ExpensesDonut from './ExpensesDonut.vue';
+import SelectedTransactions from './SelectedTransactions.vue';
 import SeriesTable from './SeriesTable.vue';
 import { tooltipTemplate } from './tooltip';
 
@@ -20,7 +23,13 @@ const props = defineProps<{
   bucketLabel: string;
   // Short axis label for a bucket (defaults to the row label)
   formatTick?: (row: Row) => string;
+  // The clicked segment and its transactions, shown under the chart
+  selection: ChartSelection | null;
+  selectedTransactions: Transaction[];
 }>();
+const emit = defineEmits<{ select: [selection: ChartSelection | null] }>();
+
+const view = ref<'chart' | 'share' | 'table'>('chart');
 
 const config = computed<ChartConfig>(() =>
   Object.fromEntries(props.series.map((s) => [s.key, { label: s.label, color: s.color }])),
@@ -41,17 +50,40 @@ const tickLabel = (i: number) => {
 const triggers = {
   [StackedBar.selectors.bar]: tooltipTemplate(() => config.value, { hideZero: true, showTotal: true }),
 };
+
+// Clicking the same segment again closes the list
+function select(selection: ChartSelection) {
+  const same =
+    props.selection?.bucket === selection.bucket &&
+    props.selection?.keys.join() === selection.keys.join();
+  emit('select', same ? null : selection);
+}
+
+// Unovis hands the bar's row merged with its stack index
+const barEvents = {
+  [StackedBar.selectors.bar]: {
+    click: (d: Record<string, unknown>) => {
+      const row = (d.datum ?? d) as Row & { stackIndex?: number };
+      const s = props.series[Number(d.stackIndex ?? row.stackIndex)];
+      if (s) select({ keys: [s.key], label: `${s.label} · ${row.label}`, bucket: Number(row.t) });
+    },
+  },
+};
 </script>
 
 <template>
   <Card>
-    <Tabs default-value="chart" class="gap-6">
+    <Tabs v-model="view" class="gap-6">
       <CardHeader>
         <CardTitle>{{ title }}</CardTitle>
         <CardDescription>{{ description }}</CardDescription>
-        <CardAction>
+        <CardAction class="flex flex-wrap justify-end gap-2">
+          <!-- Extra controls from the parent (the week / month choice): they
+               shape the bars and the table, not the share of the period -->
+          <slot v-if="view !== 'share'" name="actions" />
           <TabsList>
             <TabsTrigger value="chart">Graphique</TabsTrigger>
+            <TabsTrigger value="share">Répartition</TabsTrigger>
             <TabsTrigger value="table">Tableau</TabsTrigger>
           </TabsList>
         </CardAction>
@@ -71,6 +103,7 @@ const triggers = {
                   :bar-max-width="24"
                   :rounded-corners="4"
                   :bar-padding="0.2"
+                  :events="barEvents"
                 />
                 <VisAxis
                   type="x"
@@ -93,10 +126,20 @@ const triggers = {
               <ChartLegendContent />
             </ChartContainer>
           </TabsContent>
+          <TabsContent value="share">
+            <ExpensesDonut :rows="rows" :series="series" @select="select" />
+          </TabsContent>
           <TabsContent value="table">
             <SeriesTable :rows="rows" :series="series" :bucket-label="bucketLabel" show-total />
           </TabsContent>
         </template>
+        <!-- The list follows the chart and share views, not the table -->
+        <SelectedTransactions
+          v-if="view !== 'table'"
+          :selection="selection"
+          :transactions="selectedTransactions"
+          @close="emit('select', null)"
+        />
       </CardContent>
     </Tabs>
   </Card>

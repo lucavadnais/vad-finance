@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
 import { checkDuplicates } from '../lib/duplicates.js';
-import { syncTransferAfterUpdate, unlinkTransfer } from '../lib/transfers.js';
+import { autoLinkTransfers, syncTransferAfterUpdate, unlinkTransfer } from '../lib/transfers.js';
 import { parseTransactionsCsv } from '../lib/parseTransactionsCsv.js';
 
 const router = Router();
@@ -73,8 +73,10 @@ router.post('/import', async (req, res) => {
     else toInsert.push(doc);
   }
 
-  await Transaction.insertMany(toInsert);
-  res.status(201).json({ inserted: toInsert.length, skipped: transactions.length - toInsert.length });
+  const inserted = await Transaction.insertMany(toInsert);
+  // Rows marked as transfers get linked to their other side when it is already here
+  const linked = await autoLinkTransfers(inserted);
+  res.status(201).json({ inserted: inserted.length, skipped: transactions.length - inserted.length, linked });
 });
 
 const MAX_PAGE_SIZE = 200;

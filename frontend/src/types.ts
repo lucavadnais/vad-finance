@@ -122,4 +122,6 @@ export interface ParsedCsv {
 export interface ImportSummary {
   inserted: number;
   skipped: number;
+  // Imported transfers linked to their other side, already in the app
+  linked: number;
 }

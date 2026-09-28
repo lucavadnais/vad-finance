@@ -168,4 +168,15 @@
   --vis-crosshair-line-stroke-color: var(--muted-foreground);
   --vis-crosshair-circle-stroke-color: var(--card);
   --vis-crosshair-circle-stroke-width: 2px;
+  --vis-stacked-bar-cursor: pointer;
+  --vis-donut-segment-stroke-color: var(--card);
+  --vis-donut-segment-stroke-width: 2px;
+  --vis-donut-central-label-text-color: var(--foreground);
+  --vis-donut-central-label-font-size: 20px;
+  --vis-donut-central-sub-label-text-color: var(--muted-foreground);
+}
+
+/* Donut slices open their transactions on click */
+[data-slot="chart"] [data-vis-single-container] path {
+  cursor: pointer;
 }

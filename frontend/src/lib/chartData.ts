@@ -25,7 +25,8 @@ export type Row = { label: string; t: number } & Record<string, number | string>
 const SLOTS = 8;
 const slot = (i: number) => `var(--series-${i + 1})`;
 const NONE_KEY = 'none';
-const OTHER_KEY = 'other';
+// Series key of the categories (or accounts) folded past the color slots
+export const OTHER_KEY = 'other';
 
 // First day (UTC) of the period, or null for all time
 export function periodStart(period: Period, now = new Date()): Date | null {
@@ -42,7 +43,7 @@ export function periodStart(period: Period, now = new Date()): Date | null {
 
 // Spending = money out, except transfers between own accounts (paying the
 // credit card from the checking account is not an expense: the card purchases are)
-const isExpense = (t: Transaction) => t.amountCents < 0 && !t.transferAccount;
+export const isExpense = (t: Transaction) => t.amountCents < 0 && !t.transferAccount;
 
 // What a category is counted under: itself, or its group when grouping is on
 interface Entity {
@@ -167,6 +168,20 @@ function expensesBy(
   }
   return [...rows.values()];
 }
+
+export type Granularity = 'week' | 'month';
+
+// A clicked bar segment or donut slice: the series it stands for (several for
+// a merged "Autres") and, for a bar, the week or month it covers
+export interface ChartSelection {
+  keys: string[];
+  label: string;
+  bucket?: number;
+}
+
+// Start (UTC ms) of the week or month a date falls in: the `t` of its row
+export const bucketStart = (date: string | Date, granularity: Granularity) =>
+  (granularity === 'week' ? weekBucket : monthBucket)(new Date(date)).t;
 
 export const expensesByMonth = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
   expensesBy(monthBucket, (b) => addMonths(b, 1), tx, s, from, now);

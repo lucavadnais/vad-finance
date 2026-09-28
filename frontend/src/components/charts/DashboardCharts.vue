@@ -1,19 +1,22 @@
 <script setup lang="ts">
 // The three dashboard charts, all scoped by the period filter above them
 import type { Account, Category, CategoryGroup, Transaction } from '@/types';
-import type { Period, Row } from '@/lib/chartData';
-import { computed, ref } from 'vue';
+import type { ChartSelection, Granularity, Period, Row } from '@/lib/chartData';
+import { computed, ref, watch } from 'vue';
 import {
   PERIODS,
   accountSeries,
   balanceOverTime,
+  bucketStart,
   expenseSeries,
   expensesByMonth,
   expensesByWeek,
+  isExpense,
   periodStart,
 } from '@/lib/chartData';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import OptionSelect from '../OptionSelect.vue';
 import BalanceChart from './BalanceChart.vue';
 import ExpensesChart from './ExpensesChart.vue';
@@ -33,8 +36,32 @@ const grouped = ref(false);
 const expenses = computed(() =>
   expenseSeries(props.transactions, props.categories, props.groups, grouped.value),
 );
-const byWeek = computed(() => expensesByWeek(props.transactions, expenses.value, from.value));
-const byMonth = computed(() => expensesByMonth(props.transactions, expenses.value, from.value));
+// Spending bucketed by week (Monday to Sunday) or by month
+const granularity = ref<Granularity>('month');
+const expenseRows = computed(() =>
+  granularity.value === 'week'
+    ? expensesByWeek(props.transactions, expenses.value, from.value)
+    : expensesByMonth(props.transactions, expenses.value, from.value),
+);
+
+// Clicked bar segment or donut slice, and the expenses behind it
+const selection = ref<ChartSelection | null>(null);
+watch([period, granularity, grouped], () => (selection.value = null));
+
+const selectedTransactions = computed(() => {
+  const sel = selection.value;
+  if (!sel) return [];
+  const keys = new Set(sel.keys);
+  return props.transactions
+    .filter(
+      (t) =>
+        isExpense(t) &&
+        (!from.value || new Date(t.date) >= from.value) &&
+        keys.has(expenses.value.keyOf(t)) &&
+        (sel.bucket === undefined || bucketStart(t.date, granularity.value) === sel.bucket),
+    )
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+});
 
 const formatWeekTick = (row: Row) =>
   new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', day: 'numeric', month: 'short' });
@@ -58,20 +85,29 @@ const balance = computed(() =>
     </div>
 
     <ExpensesChart
-      title="Dépenses par semaine"
-      description="Répartition des dépenses de chaque semaine (du lundi au dimanche) par catégorie."
-      :rows="byWeek"
+      title="Dépenses"
+      :description="
+        granularity === 'week'
+          ? 'Dépenses de chaque semaine (du lundi au dimanche), par catégorie.'
+          : 'Dépenses de chaque mois, par catégorie.'
+      "
+      :rows="expenseRows"
       :series="expenses.series"
-      bucket-label="Semaine"
-      :format-tick="formatWeekTick"
-    />
-    <ExpensesChart
-      title="Dépenses par mois"
-      description="Répartition des dépenses de chaque mois par catégorie."
-      :rows="byMonth"
-      :series="expenses.series"
-      bucket-label="Mois"
-    />
+      :bucket-label="granularity === 'week' ? 'Semaine' : 'Mois'"
+      :format-tick="granularity === 'week' ? formatWeekTick : undefined"
+      :selection="selection"
+      :selected-transactions="selectedTransactions"
+      @select="selection = $event"
+    >
+      <template #actions>
+        <Tabs v-model="granularity">
+          <TabsList>
+            <TabsTrigger value="week">Semaine</TabsTrigger>
+            <TabsTrigger value="month">Mois</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </template>
+    </ExpensesChart>
     <BalanceChart :rows="balance" :account-series="perAccount" />
   </section>
 </template>

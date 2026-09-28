@@ -65,11 +65,12 @@ function reset() {
   fileName.value = '';
 }
 
-function onDone(account: Account, { inserted, skipped }: ImportSummary) {
+function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) {
   reset();
   message.value =
     `${inserted} transaction(s) importée(s) dans « ${account.name} »` +
-    (skipped > 0 ? `, ${skipped} doublon(s) non importé(s)` : '');
+    (skipped > 0 ? `, ${skipped} doublon(s) non importé(s)` : '') +
+    (linked > 0 ? `, ${linked} transfert(s) relié(s) à l'autre compte` : '');
   emit('imported');
 }
 </script>

@@ -47,8 +47,10 @@ const linkAll = () =>
     <CardHeader>
       <CardTitle>Transferts à rapprocher</CardTitle>
       <CardDescription>
-        Ces paires ressemblent aux deux côtés d'un même transfert : même montant, dans deux comptes, à
-        quelques jours d'écart. Une fois liées, elles ne comptent plus comme une dépense ni comme un revenu.
+        Ces paires ressemblent aux deux côtés d'un même transfert entre tes comptes : même montant,
+        signes opposés, à quelques jours d'écart. Tant qu'elles ne sont pas confirmées, elles comptent
+        comme une dépense et un revenu ordinaires ; « Lier » les marque comme transfert (exclu de
+        l'analyse) et relie les deux côtés.
       </CardDescription>
       <CardAction>
         <Button :disabled="busy" @click="linkAll">Tout lier ({{ candidates.length }})</Button>

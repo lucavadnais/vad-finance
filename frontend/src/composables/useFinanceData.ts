@@ -1,0 +1,64 @@
+// App-wide data, shared by every page: loaded once, refreshed after each change
+import type {
+  Account,
+  Category,
+  CategoryGroup,
+  DuplicatePair,
+  Transaction,
+  TransferCandidate,
+} from '@/types';
+import { ref } from 'vue';
+import { api } from '@/api';
+
+const accounts = ref<Account[]>([]);
+const categories = ref<Category[]>([]);
+const categoryGroups = ref<CategoryGroup[]>([]);
+// Every transaction, for the charts; the transactions table loads its own pages
+const transactions = ref<Transaction[]>([]);
+// Bumped on each refresh so the transactions table reloads its page
+const dataVersion = ref(0);
+const transferCandidates = ref<TransferCandidate[]>([]);
+const duplicatePairs = ref<DuplicatePair[]>([]);
+const error = ref('');
+
+async function refresh() {
+  try {
+    const [a, c, g, t, tc, d] = await Promise.all([
+      api.getAccounts(),
+      api.getCategories(),
+      api.getCategoryGroups(),
+      api.getTransactions(),
+      api.getTransferCandidates(),
+      api.getDuplicates(),
+    ]);
+    accounts.value = a;
+    categories.value = c;
+    categoryGroups.value = g;
+    transactions.value = t;
+    dataVersion.value++;
+    transferCandidates.value = tc;
+    duplicatePairs.value = d;
+    error.value = '';
+  } catch (err) {
+    error.value = (err as Error).message;
+  }
+}
+
+function setError(message: string) {
+  error.value = message;
+}
+
+export function useFinanceData() {
+  return {
+    accounts,
+    categories,
+    categoryGroups,
+    transactions,
+    dataVersion,
+    transferCandidates,
+    duplicatePairs,
+    error,
+    refresh,
+    setError,
+  };
+}

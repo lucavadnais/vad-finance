@@ -28,7 +28,7 @@ const props = defineProps<{
   groups: CategoryGroup[];
 }>();
 
-const period = ref<Period>('12m');
+const period = ref<Period>('month');
 const from = computed(() => periodStart(period.value));
 
 // Count grouped categories under their group (e.g. "Milieu de vie")
@@ -37,7 +37,7 @@ const expenses = computed(() =>
   expenseSeries(props.transactions, props.categories, props.groups, grouped.value),
 );
 // Spending bucketed by week (Monday to Sunday) or by month
-const granularity = ref<Granularity>('month');
+const granularity = ref<Granularity>('week');
 const expenseRows = computed(() =>
   granularity.value === 'week'
     ? expensesByWeek(props.transactions, expenses.value, from.value)

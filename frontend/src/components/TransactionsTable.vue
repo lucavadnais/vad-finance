@@ -1,10 +1,13 @@
 <script setup lang="ts">
-// Transactions, newest first, one page at a time (paginated by the backend)
+// Transactions, newest first, one page at a time (paginated and searched by the backend)
 import type { Account, Category, Transaction } from '@/types';
 import { computed, ref, watch } from 'vue';
-import { ChevronLeft, ChevronRight } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
+import { refDebounced } from '@vueuse/core';
 import { api } from '@/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   Pagination,
   PaginationContent,
@@ -39,6 +42,9 @@ const pageSize = ref('25');
 const items = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
+// Searched on the server, a moment after the user stops typing
+const search = ref('');
+const query = refDebounced(computed(() => search.value.trim()), 300);
 
 let requestId = 0;
 // True while `page` is set from a response, so that change does not reload
@@ -47,7 +53,7 @@ async function load() {
   const id = ++requestId;
   loading.value = true;
   try {
-    const result = await api.getTransactionsPage(page.value, Number(pageSize.value));
+    const result = await api.getTransactionsPage(page.value, Number(pageSize.value), query.value);
     if (id !== requestId) return; // a newer request is on its way
     items.value = result.items;
     total.value = result.total;
@@ -69,7 +75,7 @@ watch(page, () => {
   if (syncingPage) syncingPage = false;
   else load();
 });
-watch(pageSize, () => {
+watch([pageSize, query], () => {
   // Back to page 1: the page watcher reloads, unless already there
   if (page.value !== 1) page.value = 1;
   else load();
@@ -87,7 +93,31 @@ const range = computed(() => {
   <Card>
     <CardHeader>
       <CardTitle>Transactions</CardTitle>
-      <CardDescription>{{ total }} transaction(s), les plus récentes en premier.</CardDescription>
+      <CardDescription>
+        <template v-if="query">{{ total }} résultat(s) pour « {{ query }} ».</template>
+        <template v-else>{{ total }} transaction(s), les plus récentes en premier.</template>
+      </CardDescription>
+      <CardAction class="relative w-44 sm:w-80">
+        <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          v-model="search"
+          type="search"
+          placeholder="Description, compte, catégorie, montant…"
+          aria-label="Rechercher une transaction"
+          class="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
+          @keydown.esc="search = ''"
+        />
+        <Button
+          v-if="search"
+          variant="ghost"
+          size="icon-xs"
+          class="absolute top-1/2 right-1.5 -translate-y-1/2"
+          aria-label="Effacer la recherche"
+          @click="search = ''"
+        >
+          <X />
+        </Button>
+      </CardAction>
     </CardHeader>
     <CardContent class="flex flex-col gap-4">
       <!-- While the next page loads, the current one stays, dimmed -->
@@ -112,7 +142,9 @@ const range = computed(() => {
             @changed="emit('changed')"
             @error="emit('error', $event)"
           />
-          <TableEmpty v-if="items.length === 0 && !loading" :colspan="6">Aucune transaction</TableEmpty>
+          <TableEmpty v-if="items.length === 0 && !loading" :colspan="6">
+            {{ query ? 'Aucune transaction ne correspond à la recherche' : 'Aucune transaction' }}
+          </TableEmpty>
         </TableBody>
       </Table>
 

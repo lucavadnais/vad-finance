@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
 import Account from '../models/Account.js';
+import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import { checkDuplicates } from '../lib/duplicates.js';
 import { autoLinkTransfers, syncTransferAfterUpdate, unlinkTransfer } from '../lib/transfers.js';
@@ -81,12 +82,49 @@ router.post('/import', async (req, res) => {
 
 const MAX_PAGE_SIZE = 200;
 
-// Optional filters: ?account=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD
+// Letters that also match their accented forms, so "cafe" finds "Café"
+const ACCENTS = { a: 'aàâä', c: 'cç', e: 'eéèêë', i: 'iîï', o: 'oôö', u: 'uùûü', y: 'yÿ' };
+
+// Case- and accent-insensitive regex matching `text` anywhere
+function searchRegex(text) {
+  const pattern = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/[aceiouy]/gi, (c) => {
+      const letters = ACCENTS[c.toLowerCase()];
+      return `[${letters}${letters.toUpperCase()}]`;
+    });
+  return new RegExp(pattern, 'i');
+}
+
+// ?q=: description, account or category name, or amount ("12,50" finds ±12.50)
+async function searchFilter(q) {
+  const re = searchRegex(q);
+  const [accounts, categories] = await Promise.all([
+    Account.find({ name: re }, '_id'),
+    Category.find({ name: re }, '_id'),
+  ]);
+  const or = [
+    { description: re },
+    { account: { $in: accounts.map((a) => a._id) } },
+    { category: { $in: categories.map((c) => c._id) } },
+  ];
+  const amount = q.replace(/\s/g, '').replace(',', '.');
+  if (/^-?\d+(\.\d{1,2})?$/.test(amount)) {
+    const cents = Math.abs(Math.round(Number(amount) * 100));
+    or.push({ amountCents: { $in: [cents, -cents] } });
+  }
+  return { $or: or };
+}
+
+// Optional filters: ?account=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD&q=<search>
 // With ?page=<n>&pageSize=<m> (page starts at 1) returns one page:
 // { items, total, page, pageSize }. Without `page`, the whole list (charts).
 router.get('/', async (req, res) => {
   const { account, from, to } = req.query;
-  const filter = {};
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const filter = q ? await searchFilter(q) : {};
   if (account) filter.account = account;
   if (from || to) {
     filter.date = {};

@@ -1,11 +1,12 @@
 import { Router } from 'express';
+import { FRENCH } from '../db.js';
 import Category from '../models/Category.js';
 import CategoryGroup from '../models/CategoryGroup.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  res.json(await CategoryGroup.find().sort({ name: 1 }));
+  res.json(await CategoryGroup.find().sort({ name: 1 }).collation(FRENCH));
 });
 
 router.post('/', async (req, res) => {

@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { FRENCH } from '../db.js';
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
 
@@ -16,7 +17,7 @@ function withoutLogo(body) {
 
 // List accounts with their current balance
 router.get('/', async (req, res) => {
-  const accounts = await Account.find().sort({ name: 1 }).lean();
+  const accounts = await Account.find().sort({ name: 1 }).collation(FRENCH).lean();
   const totals = await Transaction.aggregate([
     { $group: { _id: '$account', totalCents: { $sum: '$amountCents' } } },
   ]);

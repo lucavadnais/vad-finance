@@ -89,7 +89,7 @@ frontend/
 | PUT / DELETE        | `/api/categories/:id`   | `{ group: <id> \| null }` pour changer de groupe   |
 | GET / POST          | `/api/category-groups`  | Groupes de catégories (ex. « Milieu de vie »)      |
 | PUT / DELETE        | `/api/category-groups/:id` | Supprimer un groupe garde ses catégories        |
-| GET / POST          | `/api/transactions`     | Filtres : `?account=<id>&from=YYYY-MM-DD&to=...` ; pagination : `?page=1&pageSize=25` → `{ items, total, page, pageSize }` |
+| GET / POST          | `/api/transactions`     | Filtres : `?account=<id>&from=YYYY-MM-DD&to=...` ; recherche : `?q=` (description, compte, catégorie ou montant, sans casse ni accents) ; pagination : `?page=1&pageSize=25` → `{ items, total, page, pageSize }` |
 | PUT / DELETE        | `/api/transactions/:id` |                                                    |
 | POST                | `/api/transactions/check-duplicates` | Doublons possibles de transactions pas encore enregistrées |
 | GET                 | `/api/duplicates`       | Paires de transactions enregistrées en double possible |

@@ -5,3 +5,6 @@ export async function connectDb(url) {
   await mongoose.connect(url);
   console.log('Connected to MongoDB');
 }
+
+// Sort names the French way: accents and case do not push "École" after "Zoo"
+export const FRENCH = { locale: 'fr' };

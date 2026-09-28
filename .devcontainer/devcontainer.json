@@ -11,7 +11,8 @@
         "esbenp.prettier-vscode",
         "bradlc.vscode-tailwindcss",
         "mongodb.mongodb-vscode",
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "Vue.volar"
       ]
     }
   }

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// Asks which account the file belongs to. The file name gives the account name
-// and the bank, but not the account type, so the user picks the type here.
-import type { Account, AccountType, ImportSummary, ParsedCsv } from '@/types';
-import { computed, ref } from 'vue';
-import { api, formatCents } from '@/api';
-import { BANKS } from '@/lib/banks';
-import { ACCOUNT_TYPES } from '@/lib/labels';
+// Import preview: pick the account the statement belongs to, review and edit
+// each row (description, category), leave out duplicates, then import.
+import type { Account, Category, DuplicateMatch, ImportSummary, ParsedCsv } from '@/types';
+import { computed, ref, watch } from 'vue';
+import { api, formatCents, formatDate } from '@/api';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -25,52 +25,96 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import OptionSelect from './OptionSelect.vue';
+import AccountSelect from './AccountSelect.vue';
+import CategorySelect, { TRANSFER } from './CategorySelect.vue';
 import ParseErrors from './ParseErrors.vue';
 
-const props = defineProps<{ accounts: Account[]; result: ParsedCsv }>();
+const props = defineProps<{ accounts: Account[]; categories: Category[]; result: ParsedCsv }>();
 const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportSummary] }>();
 
-const name = ref(props.result.accountName);
-const type = ref<AccountType>(findAccount(props.result.accountName)?.type ?? 'checking');
+const accountId = ref<string | undefined>(props.accounts.length === 1 ? props.accounts[0]._id : undefined);
+const account = computed(() => props.accounts.find((a) => a._id === accountId.value));
+
+// Editable copy of the parsed rows. `category` may be TRANSFER: the row is then
+// a transfer to or from `transferAccount`
+const rows = ref(
+  props.result.transactions.map((t) => ({
+    ...t,
+    category: null as string | null,
+    transferAccount: undefined as string | undefined,
+  })),
+);
+
+// The other accounts, for transfers
+const otherAccounts = computed(() => props.accounts.filter((a) => a._id !== accountId.value));
+const count = computed(() => rows.value.length);
+
 const saving = ref(false);
 const error = ref('');
+// A validation message goes away as soon as the rows are edited
+watch(rows, () => (error.value = ''), { deep: true });
 
-const existing = computed(() => findAccount(name.value, type.value));
-const bank = computed(() => (props.result.bank ? BANKS[props.result.bank] : undefined));
-const count = computed(() => props.result.transactions.length);
+// Rows that may already be in the chosen account. Exact ones (same day, label
+// and amount) start unchecked; possible ones stay checked but flagged, since
+// dropping a real transaction silently is worse than a visible duplicate.
+const duplicates = ref(new Map<number, DuplicateMatch>());
+const selected = ref<boolean[]>(rows.value.map(() => true));
+const checking = ref(false);
 
-// Same bank and name (case-insensitive), and same type when given
-function findAccount(accountName: string, accountType?: AccountType) {
-  const wanted = accountName.trim().toLowerCase();
-  return props.accounts.find(
-    (a) =>
-      (a.bank ?? null) === props.result.bank &&
-      a.name.trim().toLowerCase() === wanted &&
-      (accountType === undefined || a.type === accountType),
-  );
-}
+watch(
+  account,
+  async (acc) => {
+    duplicates.value = new Map();
+    selected.value = rows.value.map(() => true);
+    if (!acc) return;
+    checking.value = true;
+    try {
+      const matches = await api.checkDuplicates(acc._id, props.result.transactions);
+      if (account.value?._id !== acc._id) return; // account changed meanwhile
+      duplicates.value = new Map(matches.map((m) => [m.index, m]));
+      selected.value = rows.value.map((_, i) => duplicates.value.get(i)?.kind !== 'exact');
+    } catch (err) {
+      error.value = (err as Error).message;
+    } finally {
+      checking.value = false;
+    }
+  },
+  { immediate: true },
+);
+
+const selectedCount = computed(() => selected.value.filter(Boolean).length);
+const exactCount = computed(() => [...duplicates.value.values()].filter((d) => d.kind === 'exact').length);
+const possibleCount = computed(() => duplicates.value.size - exactCount.value);
 
 function onOpenChange(open: boolean) {
   if (!open && !saving.value) emit('cancel');
 }
 
 async function submit() {
+  if (!account.value) return;
+  const chosen = rows.value.filter((_, i) => selected.value[i]);
+  const isTransfer = (r: (typeof chosen)[number]) => r.category === TRANSFER;
+  if (chosen.some((r) => isTransfer(r) && (!r.transferAccount || r.transferAccount === accountId.value))) {
+    error.value = "Choisis l'autre compte de chaque transfert";
+    return;
+  }
   saving.value = true;
   error.value = '';
   try {
-    const account =
-      existing.value ??
-      (await api.createAccount({
-        name: name.value.trim(),
-        type: type.value,
-        bank: props.result.bank ?? undefined,
-      }));
     const summary = await api.importTransactions({
-      account: account._id,
-      transactions: props.result.transactions,
+      account: account.value._id,
+      transactions: chosen.map((r) => ({
+        date: r.date,
+        description: r.description,
+        amountCents: r.amountCents,
+        category: isTransfer(r) ? null : r.category,
+        transferAccount: isTransfer(r) ? r.transferAccount : null,
+      })),
+      // The duplicates were reviewed above: import exactly the checked rows
+      allowDuplicates: true,
     });
-    emit('done', account, summary);
+    // Unchecked rows (duplicates left out) count as skipped
+    emit('done', account.value, { ...summary, skipped: summary.skipped + count.value - selectedCount.value });
   } catch (err) {
     error.value = (err as Error).message;
     saving.value = false;
@@ -80,48 +124,76 @@ async function submit() {
 
 <template>
   <Dialog :open="true" @update:open="onOpenChange">
-    <DialogContent class="sm:max-w-3xl">
+    <DialogContent class="sm:max-w-5xl">
       <form class="flex flex-col gap-4" @submit.prevent="submit">
-        <DialogHeader class="flex-row items-center gap-3">
-          <img v-if="bank" :src="bank.logo" :alt="bank.name" class="size-10 rounded-md" />
-          <div class="flex flex-col gap-1">
-            <DialogTitle>Dans quel compte importer ?</DialogTitle>
-            <DialogDescription>
-              {{ count }} transaction(s) lue(s){{
-                result.errors.length > 0 ? `, ${result.errors.length} ligne(s) ignorée(s)` : ''
-              }}
-            </DialogDescription>
-          </div>
+        <DialogHeader>
+          <DialogTitle>Importer le relevé</DialogTitle>
+          <DialogDescription>
+            {{ count }} transaction(s) lue(s){{
+              result.errors.length > 0 ? `, ${result.errors.length} ligne(s) ignorée(s)` : ''
+            }}. Choisis le compte, puis ajuste les descriptions et les catégories au besoin.
+          </DialogDescription>
         </DialogHeader>
 
-        <div class="flex flex-wrap gap-4">
-          <div class="flex flex-1 flex-col gap-2">
-            <Label for="import-account-name">Nom du compte</Label>
-            <Input id="import-account-name" v-model="name" required />
-          </div>
-          <div class="flex flex-col gap-2">
-            <Label>Type de compte</Label>
-            <OptionSelect v-model="type" :options="ACCOUNT_TYPES" class="w-40" />
-          </div>
+        <div class="flex flex-col gap-2">
+          <Label for="import-account">Compte</Label>
+          <p v-if="accounts.length === 0" class="text-sm text-destructive">
+            Aucun compte : crée d'abord le compte dans la carte Comptes.
+          </p>
+          <AccountSelect v-else id="import-account" v-model="accountId" :accounts="accounts" class="w-72" />
         </div>
 
         <ParseErrors :errors="result.errors" />
 
-        <div class="max-h-72 overflow-y-auto rounded-md border">
+        <div class="max-h-96 overflow-y-auto rounded-md border">
           <Table>
-            <TableHeader class="sticky top-0 bg-background">
+            <TableHeader class="sticky top-0 z-10 bg-background">
               <TableRow>
+                <TableHead class="w-8" />
                 <TableHead>Date</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Catégorie</TableHead>
                 <TableHead class="text-right">Montant</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="(t, i) in result.transactions" :key="i">
-                <TableCell>{{ t.date }}</TableCell>
-                <TableCell class="whitespace-normal">{{ t.description }}</TableCell>
+              <TableRow
+                v-for="(t, i) in rows"
+                :key="i"
+                :class="!selected[i] && 'opacity-50'"
+              >
+                <TableCell>
+                  <Checkbox v-model="selected[i]" :aria-label="`Importer ${t.description}`" />
+                </TableCell>
+                <TableCell class="whitespace-nowrap">{{ t.date }}</TableCell>
+                <TableCell class="min-w-64 whitespace-normal">
+                  <Input v-model="t.description" :aria-label="`Description du ${t.date}`" class="h-8" />
+                  <div v-if="duplicates.get(i)" class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                    <Badge :variant="duplicates.get(i)!.kind === 'exact' ? 'secondary' : 'outline'">
+                      {{ duplicates.get(i)!.kind === 'exact' ? 'Déjà présente' : 'Doublon possible' }}
+                    </Badge>
+                    <span class="text-muted-foreground">
+                      {{ formatDate(duplicates.get(i)!.match.date) }} · {{ duplicates.get(i)!.match.description }}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell class="space-y-1.5">
+                  <CategorySelect
+                    v-model="t.category"
+                    :categories="categories"
+                    :allow-transfer="accounts.length > 1"
+                    class="h-8 w-44"
+                  />
+                  <AccountSelect
+                    v-if="t.category === TRANSFER"
+                    v-model="t.transferAccount"
+                    :accounts="otherAccounts"
+                    :placeholder="t.amountCents < 0 ? 'Vers le compte' : 'Du compte'"
+                    class="h-8 w-44"
+                  />
+                </TableCell>
                 <TableCell
-                  class="text-right tabular-nums"
+                  class="text-right whitespace-nowrap tabular-nums"
                   :class="t.amountCents < 0 ? 'text-destructive' : 'text-emerald-600'"
                 >
                   {{ formatCents(t.amountCents) }}
@@ -132,11 +204,16 @@ async function submit() {
         </div>
 
         <p class="text-sm text-muted-foreground">
-          <template v-if="existing">
-            Les {{ count }} transaction(s) seront ajoutées au compte existant.
-          </template>
+          <template v-if="!account">Choisis le compte pour vérifier les doublons.</template>
+          <template v-else-if="checking">Recherche des doublons…</template>
           <template v-else>
-            Un nouveau compte{{ bank ? ` ${bank.name}` : '' }} sera créé avec {{ count }} transaction(s).
+            {{ selectedCount }} transaction(s) sur {{ count }} seront ajoutées à « {{ account.name }} ».
+            <template v-if="exactCount > 0">
+              {{ exactCount }} déjà présente(s), décochée(s).
+            </template>
+            <template v-if="possibleCount > 0">
+              {{ possibleCount }} doublon(s) possible(s) à vérifier : décoche celles déjà saisies.
+            </template>
           </template>
         </p>
 
@@ -146,7 +223,9 @@ async function submit() {
           <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')">
             Annuler
           </Button>
-          <Button type="submit" :disabled="saving">{{ saving ? 'Import…' : 'Importer' }}</Button>
+          <Button type="submit" :disabled="!account || saving || checking || selectedCount === 0">
+            {{ saving ? 'Import…' : 'Importer' }}
+          </Button>
         </DialogFooter>
       </form>
     </DialogContent>

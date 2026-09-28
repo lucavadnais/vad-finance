@@ -42,23 +42,6 @@ export function parseTransactionsCsv(text) {
   return { transactions, errors };
 }
 
-// "Compte cheques (2).csv" -> "Compte cheques" (the bank names the file after the account;
-// the browser adds " (n)" when the same file is downloaded several times)
-export function accountNameFromFileName(fileName = '') {
-  return fileName
-    .replace(/\.csv$/i, '')
-    .replace(/\s*\(\d+\)$/, '')
-    .trim();
-}
-
-// "Compte CIBC.csv" -> 'cibc', "NBC visa.csv" -> 'nbc', otherwise null
-const BANK_KEYS = ['cibc', 'nbc'];
-
-export function bankFromFileName(fileName = '') {
-  const words = fileName.toLowerCase().split(/[^a-z0-9]+/);
-  return BANK_KEYS.find((key) => words.includes(key)) ?? null;
-}
-
 // Splits one CSV line, honouring double-quoted fields ("a, b" and "" escapes)
 function splitCsvLine(line) {
   const fields = [];

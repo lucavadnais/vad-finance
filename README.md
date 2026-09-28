@@ -84,10 +84,21 @@ frontend/
 | GET                 | `/api/health`           | Vérification de l'état                             |
 | GET / POST          | `/api/accounts`         | Comptes (avec solde calculé)                       |
 | PUT / DELETE        | `/api/accounts/:id`     |                                                    |
+| GET / PUT / DELETE  | `/api/accounts/:id/logo` | Image du compte (PUT : le fichier brut, PNG/JPEG/WebP/GIF, 1 Mo max) |
 | GET / POST          | `/api/categories`       | Catégories (`income` / `expense`)                  |
-| DELETE              | `/api/categories/:id`   |                                                    |
-| GET / POST          | `/api/transactions`     | Filtres : `?account=<id>&from=YYYY-MM-DD&to=...`   |
+| PUT / DELETE        | `/api/categories/:id`   | `{ group: <id> \| null }` pour changer de groupe   |
+| GET / POST          | `/api/category-groups`  | Groupes de catégories (ex. « Milieu de vie »)      |
+| PUT / DELETE        | `/api/category-groups/:id` | Supprimer un groupe garde ses catégories        |
+| GET / POST          | `/api/transactions`     | Filtres : `?account=<id>&from=YYYY-MM-DD&to=...` ; pagination : `?page=1&pageSize=25` → `{ items, total, page, pageSize }` |
 | PUT / DELETE        | `/api/transactions/:id` |                                                    |
+| POST                | `/api/transactions/check-duplicates` | Doublons possibles de transactions pas encore enregistrées |
+| GET                 | `/api/duplicates`       | Paires de transactions enregistrées en double possible |
+| POST                | `/api/duplicates/ignore` | « Pas un doublon » (`{ ids: [a, b] }`)            |
+| GET                 | `/api/transfers/candidates` | Paires probables à rapprocher en transfert     |
+| POST                | `/api/transfers`        | Crée les deux côtés d'un transfert entre comptes   |
+| POST                | `/api/transfers/link`   | Lie deux transactions existantes (`{ ids: [a, b] }`) |
+| POST                | `/api/transfers/ignore` | Ne plus proposer une paire                         |
+| DELETE              | `/api/transfers/link/:id` | Délie les deux côtés                             |
 
 Les montants sont stockés en **cents** (entiers) pour éviter les erreurs d'arrondi.
 Une transaction positive est un revenu, une négative une dépense.

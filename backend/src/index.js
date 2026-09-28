@@ -3,7 +3,10 @@ import cors from 'cors';
 import { connectDb } from './db.js';
 import accountsRouter from './routes/accounts.js';
 import categoriesRouter from './routes/categories.js';
+import categoryGroupsRouter from './routes/categoryGroups.js';
 import transactionsRouter from './routes/transactions.js';
+import transfersRouter from './routes/transfers.js';
+import duplicatesRouter from './routes/duplicates.js';
 
 const app = express();
 app.use(cors());
@@ -12,10 +15,15 @@ app.use(express.json());
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/accounts', accountsRouter);
 app.use('/api/categories', categoriesRouter);
+app.use('/api/category-groups', categoryGroupsRouter);
 app.use('/api/transactions', transactionsRouter);
+app.use('/api/transfers', transfersRouter);
+app.use('/api/duplicates', duplicatesRouter);
 
 // Express 5 forwards rejected promises from async handlers here
 app.use((err, req, res, next) => {
+  // Errors thrown by our own code with an HTTP status (see lib/transfers.js)
+  if (err.status) return res.status(err.status).json({ error: err.message });
   if (err.name === 'ValidationError' || err.name === 'CastError') {
     return res.status(400).json({ error: err.message });
   }

@@ -1,39 +1,55 @@
 <script setup lang="ts">
-import type { Account, Category, Transaction } from '@/types';
-import { computed, onMounted, ref } from 'vue';
+import type {
+  Account,
+  Category,
+  CategoryGroup,
+  DuplicatePair,
+  Transaction,
+  TransferCandidate,
+} from '@/types';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { api, formatCents } from '@/api';
-import { BANKS } from '@/lib/banks';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableEmpty,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import AccountForm from './components/AccountForm.vue';
+import AccountLogoButton from './components/AccountLogoButton.vue';
 import CategoryManager from './components/CategoryManager.vue';
 import CsvImport from './components/CsvImport.vue';
-import TransactionForm from './components/TransactionForm.vue';
-import TransactionRow from './components/TransactionRow.vue';
+import TransactionsTable from './components/TransactionsTable.vue';
+import TransferSuggestions from './components/TransferSuggestions.vue';
+import DuplicateReview from './components/DuplicateReview.vue';
+
+// Charts pull in Unovis (~1 MB): load them in their own chunk
+const DashboardCharts = defineAsyncComponent(() => import('./components/charts/DashboardCharts.vue'));
 
 const accounts = ref<Account[]>([]);
 const categories = ref<Category[]>([]);
+const categoryGroups = ref<CategoryGroup[]>([]);
+// Every transaction, for the charts; the table loads its own pages
 const transactions = ref<Transaction[]>([]);
+// Bumped on each refresh so the table reloads its page
+const dataVersion = ref(0);
+const transferCandidates = ref<TransferCandidate[]>([]);
+const duplicatePairs = ref<DuplicatePair[]>([]);
 const error = ref('');
 
 async function refresh() {
   try {
-    const [a, c, t] = await Promise.all([
+    const [a, c, g, t, tc, d] = await Promise.all([
       api.getAccounts(),
       api.getCategories(),
+      api.getCategoryGroups(),
       api.getTransactions(),
+      api.getTransferCandidates(),
+      api.getDuplicates(),
     ]);
     accounts.value = a;
     categories.value = c;
+    categoryGroups.value = g;
     transactions.value = t;
+    dataVersion.value++;
+    transferCandidates.value = tc;
+    duplicatePairs.value = d;
     error.value = '';
   } catch (err) {
     error.value = (err as Error).message;
@@ -61,12 +77,7 @@ function setError(message: string) {
       <CardContent class="flex flex-col gap-4">
         <ul class="flex flex-col gap-2">
           <li v-for="a in accounts" :key="a._id" class="flex items-center gap-2 text-sm">
-            <img
-              v-if="a.bank && BANKS[a.bank]"
-              :src="BANKS[a.bank].logo"
-              :alt="BANKS[a.bank].name"
-              class="size-5 rounded"
-            />
+            <AccountLogoButton :account="a" @changed="refresh" @error="setError" />
             <span class="font-medium">{{ a.name }}</span>
             <span class="text-muted-foreground">({{ ACCOUNT_TYPES[a.type] ?? a.type }})</span>
             <span class="ml-auto tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
@@ -76,47 +87,49 @@ function setError(message: string) {
       </CardContent>
     </Card>
 
-    <CategoryManager :categories="categories" @changed="refresh" @error="setError" />
+    <DashboardCharts
+      :transactions="transactions"
+      :accounts="accounts"
+      :categories="categories"
+      :groups="categoryGroups"
+    />
 
-    <CsvImport :accounts="accounts" @imported="refresh" />
+    <CategoryManager
+      :categories="categories"
+      :groups="categoryGroups"
+      @changed="refresh"
+      @error="setError"
+    />
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Transactions</CardTitle>
-      </CardHeader>
-      <CardContent class="flex flex-col gap-4">
-        <TransactionForm
-          v-if="accounts.length > 0"
-          :accounts="accounts"
-          :categories="categories"
-          @created="refresh"
-          @error="setError"
-        />
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Compte</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Catégorie</TableHead>
-              <TableHead class="text-right">Montant</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TransactionRow
-              v-for="t in transactions"
-              :key="t._id"
-              :transaction="t"
-              :accounts="accounts"
-              :categories="categories"
-              @changed="refresh"
-              @error="setError"
-            />
-            <TableEmpty v-if="transactions.length === 0" :colspan="6">Aucune transaction</TableEmpty>
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <CsvImport
+      :accounts="accounts"
+      :categories="categories"
+      @imported="refresh"
+      @created="refresh"
+      @error="setError"
+    />
+
+    <!-- Shown when an import (or a manual entry) produced both sides of a transfer -->
+    <TransferSuggestions
+      v-if="transferCandidates.length > 0"
+      :candidates="transferCandidates"
+      @changed="refresh"
+      @error="setError"
+    />
+
+    <DuplicateReview
+      v-if="duplicatePairs.length > 0"
+      :pairs="duplicatePairs"
+      @changed="refresh"
+      @error="setError"
+    />
+
+    <TransactionsTable
+      :accounts="accounts"
+      :categories="categories"
+      :version="dataVersion"
+      @changed="refresh"
+      @error="setError"
+    />
   </main>
 </template>

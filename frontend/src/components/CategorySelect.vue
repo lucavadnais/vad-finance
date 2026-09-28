@@ -1,3 +1,8 @@
+<script lang="ts">
+// Model value meaning "transfer between own accounts" (with `allow-transfer`)
+export const TRANSFER = 'transfer';
+</script>
+
 <script setup lang="ts">
 // Category id (or null for "no category"), grouped by kind
 import type { HTMLAttributes } from 'vue';
@@ -16,7 +21,12 @@ import {
 import { CATEGORY_KINDS } from '@/lib/labels';
 
 const model = defineModel<string | null>({ default: null });
-const props = defineProps<{ categories: Category[]; class?: HTMLAttributes['class'] }>();
+const props = defineProps<{
+  categories: Category[];
+  // Adds a "Transfert" choice, for transactions between own accounts
+  allowTransfer?: boolean;
+  class?: HTMLAttributes['class'];
+}>();
 
 // Select items cannot have an empty value, so "no category" uses a sentinel
 const NONE = 'none';
@@ -45,6 +55,10 @@ const groups = computed(() =>
           <SelectLabel>{{ g.label }}</SelectLabel>
           <SelectItem v-for="c in g.items" :key="c._id" :value="c._id">{{ c.name }}</SelectItem>
         </SelectGroup>
+      </template>
+      <template v-if="allowTransfer">
+        <SelectSeparator />
+        <SelectItem :value="TRANSFER">Transfert</SelectItem>
       </template>
     </SelectContent>
   </Select>

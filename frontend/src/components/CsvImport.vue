@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import type { Account, ImportSummary, ParsedCsv } from '@/types';
+import type { Account, Category, ImportSummary, ParsedCsv } from '@/types';
 import { ref } from 'vue';
-import { Upload } from '@lucide/vue';
+import { ChevronRight, Upload } from '@lucide/vue';
 import { api } from '@/api';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Separator } from '@/components/ui/separator';
 import AccountDialog from './AccountDialog.vue';
 import ParseErrors from './ParseErrors.vue';
+import TransactionForm from './TransactionForm.vue';
 
-defineProps<{ accounts: Account[] }>();
-const emit = defineEmits<{ imported: [] }>();
+defineProps<{ accounts: Account[]; categories: Category[] }>();
+// `imported` after a CSV import, `created` after a manual entry
+const emit = defineEmits<{ imported: []; created: []; error: [message: string] }>();
 
 const input = ref<HTMLInputElement | null>(null);
 const dragging = ref(false);
@@ -18,6 +23,7 @@ const result = ref<ParsedCsv | null>(null);
 const dialogOpen = ref(false);
 const message = ref('');
 const error = ref('');
+const manualOpen = ref(false);
 
 async function handleFile(file: File | undefined) {
   if (!file) return;
@@ -63,7 +69,7 @@ function onDone(account: Account, { inserted, skipped }: ImportSummary) {
   reset();
   message.value =
     `${inserted} transaction(s) importée(s) dans « ${account.name} »` +
-    (skipped > 0 ? `, ${skipped} déjà présente(s) ignorée(s)` : '');
+    (skipped > 0 ? `, ${skipped} doublon(s) non importé(s)` : '');
   emit('imported');
 }
 </script>
@@ -71,16 +77,17 @@ function onDone(account: Account, { inserted, skipped }: ImportSummary) {
 <template>
   <Card>
     <CardHeader>
-      <CardTitle>Importer un relevé CSV</CardTitle>
+      <CardTitle>Ajouter des transactions</CardTitle>
       <CardDescription>
-        Le nom du fichier sert de nom de compte et indique la banque (CIBC, NBC).
+        Dépose le relevé CSV de ta banque : tu choisiras le compte et vérifieras les transactions
+        avant de les importer.
       </CardDescription>
     </CardHeader>
-    <CardContent class="flex flex-col gap-3">
+    <CardContent class="flex flex-col gap-4">
       <div
         role="button"
         tabindex="0"
-        class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-8 text-center text-sm transition-colors"
+        class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-10 text-center transition-colors"
         :class="dragging ? 'border-primary bg-muted' : 'border-border hover:bg-muted/50'"
         @click="input?.click()"
         @keydown.enter.space.prevent="input?.click()"
@@ -88,10 +95,11 @@ function onDone(account: Account, { inserted, skipped }: ImportSummary) {
         @dragleave="dragging = false"
         @drop.prevent="onDrop"
       >
-        <Upload class="size-6 text-muted-foreground" />
-        <p>
-          {{ loading ? 'Lecture en cours…' : fileName || 'Glisse un fichier CSV ici ou clique pour le choisir' }}
+        <Upload class="size-8 text-muted-foreground" />
+        <p class="font-medium">
+          {{ loading ? 'Lecture en cours…' : fileName || 'Glisse ton relevé CSV ici' }}
         </p>
+        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground">ou clique pour le choisir</p>
         <input ref="input" type="file" accept=".csv,text/csv" hidden @change="onChange" />
       </div>
 
@@ -107,10 +115,33 @@ function onDone(account: Account, { inserted, skipped }: ImportSummary) {
       <AccountDialog
         v-if="dialogOpen && result"
         :accounts="accounts"
+        :categories="categories"
         :result="result"
         @cancel="reset"
         @done="onDone"
       />
+
+      <Separator />
+
+      <!-- Secondary: one transaction at a time, folded by default -->
+      <Collapsible v-model:open="manualOpen">
+        <CollapsibleTrigger as-child>
+          <Button variant="ghost" size="sm" class="-ml-2 text-muted-foreground">
+            <ChevronRight class="transition-transform" :class="manualOpen && 'rotate-90'" />
+            Saisir une transaction à la main
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent class="pt-3">
+          <TransactionForm
+            v-if="accounts.length > 0"
+            :accounts="accounts"
+            :categories="categories"
+            @created="emit('created')"
+            @error="emit('error', $event)"
+          />
+          <p v-else class="text-sm text-muted-foreground">Crée d'abord un compte dans la carte Comptes.</p>
+        </CollapsibleContent>
+      </Collapsible>
     </CardContent>
   </Card>
 </template>

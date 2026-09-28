@@ -1,17 +1,14 @@
 import express, { Router } from 'express';
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
-import {
-  accountNameFromFileName,
-  bankFromFileName,
-  parseTransactionsCsv,
-} from '../lib/parseTransactionsCsv.js';
+import { checkDuplicates } from '../lib/duplicates.js';
+import { syncTransferAfterUpdate, unlinkTransfer } from '../lib/transfers.js';
+import { parseTransactionsCsv } from '../lib/parseTransactionsCsv.js';
 
 const router = Router();
 
-// Body: raw CSV file, ?fileName=<original file name>. Returns the parsed
-// transactions, the account name and the bank (both taken from the file name)
-// without saving.
+// Body: raw CSV file. Returns the parsed transactions without saving them
+// (the user picks the account in the import preview).
 router.post(
   '/parse-csv',
   express.text({ type: 'text/csv', limit: '5mb' }),
@@ -19,20 +16,29 @@ router.post(
     if (typeof req.body !== 'string' || !req.body.trim()) {
       return res.status(400).json({ error: 'Fichier CSV vide ou manquant' });
     }
-    res.json({
-      accountName: accountNameFromFileName(req.query.fileName),
-      bank: bankFromFileName(req.query.fileName),
-      ...parseTransactionsCsv(req.body),
-    });
+    res.json(parseTransactionsCsv(req.body));
   },
 );
 
 // Body: { account, transactions: [{ date, description, amountCents }] }
-// Skips transactions already in the account, so importing the same file twice
-// adds nothing. Identical rows (same date, description and amount) are compared
-// by count: a file with two identical coffees adds two, re-importing it adds none.
+// Returns [{ index, kind: 'exact' | 'possible', match }] for the rows that may
+// already be in the account (see lib/duplicates.js)
+router.post('/check-duplicates', async (req, res) => {
+  const { account, transactions } = req.body;
+  if (!Array.isArray(transactions)) {
+    return res.status(400).json({ error: 'transactions doit être une liste' });
+  }
+  res.json(await checkDuplicates(account, transactions));
+});
+
+// Body: { account, transactions: [{ date, description, amountCents, category?, transferAccount? }], allowDuplicates? }
+// By default skips transactions already in the account, so importing the same
+// file twice adds nothing. Identical rows (same date, description and amount)
+// are compared by count: a file with two identical coffees adds two,
+// re-importing it adds none. `allowDuplicates` inserts every row as given (the
+// user already reviewed the duplicates in the import preview).
 router.post('/import', async (req, res) => {
-  const { account: accountId, transactions } = req.body;
+  const { account: accountId, transactions, allowDuplicates } = req.body;
   if (!Array.isArray(transactions)) {
     return res.status(400).json({ error: 'transactions doit être une liste' });
   }
@@ -41,6 +47,9 @@ router.post('/import', async (req, res) => {
   }
   const account = await Account.findById(accountId);
   if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (transactions.some((t) => t.transferAccount && String(t.transferAccount) === String(account._id))) {
+    return res.status(400).json({ error: "Un transfert doit aller vers un autre compte" });
+  }
 
   const key = (t) => `${new Date(t.date).toISOString()}|${t.description}|${t.amountCents}`;
   const existingCount = new Map();
@@ -49,9 +58,18 @@ router.post('/import', async (req, res) => {
 
   const toInsert = [];
   for (const t of transactions) {
-    const doc = { account: account._id, date: t.date, description: t.description ?? '', amountCents: t.amountCents };
+    const doc = {
+      account: account._id,
+      date: t.date,
+      description: t.description ?? '',
+      amountCents: t.amountCents,
+      // Chosen in the import preview. A transfer between own accounts has no
+      // category; its other side can then be linked from the suggestions.
+      category: t.transferAccount ? null : t.category || null,
+      transferAccount: t.transferAccount || null,
+    };
     const k = key(doc);
-    if (existingCount.get(k) > 0) existingCount.set(k, existingCount.get(k) - 1);
+    if (!allowDuplicates && existingCount.get(k) > 0) existingCount.set(k, existingCount.get(k) - 1);
     else toInsert.push(doc);
   }
 
@@ -59,7 +77,11 @@ router.post('/import', async (req, res) => {
   res.status(201).json({ inserted: toInsert.length, skipped: transactions.length - toInsert.length });
 });
 
+const MAX_PAGE_SIZE = 200;
+
 // Optional filters: ?account=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD
+// With ?page=<n>&pageSize=<m> (page starts at 1) returns one page:
+// { items, total, page, pageSize }. Without `page`, the whole list (charts).
 router.get('/', async (req, res) => {
   const { account, from, to } = req.query;
   const filter = {};
@@ -70,30 +92,52 @@ router.get('/', async (req, res) => {
     if (to) filter.date.$lte = new Date(to);
   }
 
-  const transactions = await Transaction.find(filter)
-    .sort({ date: -1 })
-    .populate('account', 'name')
-    .populate('category', 'name kind');
-  res.json(transactions);
+  // Newest first; _id breaks ties so pages never overlap or skip rows
+  const query = () =>
+    Transaction.find(filter)
+      .sort({ date: -1, _id: -1 })
+      .populate('account', 'name')
+      .populate('category', 'name kind')
+      .populate('transferAccount', 'name');
+
+  if (req.query.page === undefined) return res.json(await query());
+
+  const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 25, 1), MAX_PAGE_SIZE);
+  const total = await Transaction.countDocuments(filter);
+  const lastPage = Math.max(Math.ceil(total / pageSize), 1);
+  // A page past the end (e.g. after deleting its last row) gives the last one
+  const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), lastPage);
+  const items = await query().skip((page - 1) * pageSize).limit(pageSize);
+  res.json({ items, total, page, pageSize });
 });
 
+// Links between the two sides of a transfer go through /api/transfers only
+function withoutLink(body) {
+  const { transferPeer, transferIgnored, duplicateIgnored, ...rest } = body;
+  return rest;
+}
+
 router.post('/', async (req, res) => {
-  const transaction = await Transaction.create(req.body);
+  const transaction = await Transaction.create(withoutLink(req.body));
+  await syncTransferAfterUpdate(transaction);
   res.status(201).json(transaction);
 });
 
 router.put('/:id', async (req, res) => {
-  const transaction = await Transaction.findByIdAndUpdate(req.params.id, req.body, {
+  const transaction = await Transaction.findByIdAndUpdate(req.params.id, withoutLink(req.body), {
     new: true,
     runValidators: true,
   });
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+  await syncTransferAfterUpdate(transaction);
   res.json(transaction);
 });
 
 router.delete('/:id', async (req, res) => {
-  const transaction = await Transaction.findByIdAndDelete(req.params.id);
+  const transaction = await Transaction.findById(req.params.id);
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+  await unlinkTransfer(transaction);
+  await transaction.deleteOne();
   res.status(204).end();
 });
 

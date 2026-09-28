@@ -57,6 +57,8 @@ export const api = {
   getCategoryGroups: () => request<CategoryGroup[]>('/category-groups'),
   createCategoryGroup: (body: { name: string }) =>
     request<CategoryGroup>('/category-groups', { method: 'POST', body }),
+  updateCategoryGroup: (id: string, body: { name: string }) =>
+    request<CategoryGroup>(`/category-groups/${id}`, { method: 'PUT', body }),
   deleteCategoryGroup: (id: string) => request<null>(`/category-groups/${id}`, { method: 'DELETE' }),
   // Every transaction (charts, analysis)
   getTransactions: () => request<Transaction[]>('/transactions'),

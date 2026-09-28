@@ -22,7 +22,7 @@ export interface Series {
 export type Row = { label: string; t: number } & Record<string, number | string>;
 
 // Categorical slots, in the validated order (CSS variables in index.css)
-const SLOTS = 8;
+const SLOTS = 10;
 const slot = (i: number) => `var(--series-${i + 1})`;
 const NONE_KEY = 'none';
 // Series key of the categories (or accounts) folded past the color slots

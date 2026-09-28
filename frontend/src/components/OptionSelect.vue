@@ -14,6 +14,7 @@ const props = withDefaults(
   defineProps<{
     options: Record<T, string>;
     placeholder?: string;
+    id?: string;
     class?: HTMLAttributes['class'];
   }>(),
   { placeholder: 'Choisir…' },
@@ -22,13 +23,15 @@ const props = withDefaults(
 
 <template>
   <Select v-model="model">
-    <SelectTrigger :class="props.class">
+    <SelectTrigger :id="id" :class="props.class">
       <SelectValue :placeholder="placeholder" />
     </SelectTrigger>
     <SelectContent>
       <SelectItem v-for="(label, value) in options" :key="value" :value="value">
         {{ label }}
       </SelectItem>
+      <!-- Extra items after the options (e.g. a separator and an action) -->
+      <slot name="after" />
     </SelectContent>
   </Select>
 </template>

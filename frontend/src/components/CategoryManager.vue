@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Category, CategoryGroup, CategoryKind } from '@/types';
-import { computed, ref } from 'vue';
-import { Trash2, X } from '@lucide/vue';
+import { computed, ref, watch } from 'vue';
+import { Plus, Trash2 } from '@lucide/vue';
 import { api } from '@/api';
 import { CATEGORY_KINDS } from '@/lib/labels';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SelectItem, SelectSeparator } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -20,6 +21,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import ConfirmDialog from './ConfirmDialog.vue';
+import GroupCreateDialog from './GroupCreateDialog.vue';
+import GroupManagerDialog from './GroupManagerDialog.vue';
 import OptionSelect from './OptionSelect.vue';
 
 const props = defineProps<{ categories: Category[]; groups: CategoryGroup[] }>();
@@ -37,7 +40,6 @@ const sorted = computed(() =>
     (a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name, 'fr'),
   ),
 );
-const countIn = (group: CategoryGroup) => props.categories.filter((c) => c.group === group._id).length;
 
 // Table display: one flat list, or a section per group (then "Sans groupe")
 const byGroup = ref(true);
@@ -55,7 +57,22 @@ const sections = computed(() => {
 const name = ref('');
 const kind = ref<CategoryKind>('expense');
 const group = ref<string>(NO_GROUP);
-const groupName = ref('');
+
+// Last item of the new category's group select, below a separator: opens the group dialog
+const NEW_GROUP = 'new';
+const creatingGroup = ref(false);
+// The select keeps its value while the dialog is open: "new" is never selected
+const groupSelect = computed({
+  get: () => group.value,
+  set: (value: string) => {
+    if (value === NEW_GROUP) creatingGroup.value = true;
+    else group.value = value;
+  },
+});
+function onGroupCreated(created: CategoryGroup) {
+  group.value = created._id;
+  emit('changed');
+}
 
 async function run(action: () => Promise<unknown>) {
   try {
@@ -81,13 +98,13 @@ const setGroup = (category: Category, value: string | undefined) =>
 
 const removeCategory = (category: Category) => run(() => api.deleteCategory(category._id));
 
-const createGroup = () =>
-  run(async () => {
-    await api.createCategoryGroup({ name: groupName.value });
-    groupName.value = '';
-  });
-
-const removeGroup = (g: CategoryGroup) => run(() => api.deleteCategoryGroup(g._id));
+// A deleted group can no longer be chosen for the next category
+watch(
+  () => props.groups,
+  (groups) => {
+    if (group.value !== NO_GROUP && !groups.some((g) => g._id === group.value)) group.value = NO_GROUP;
+  },
+);
 </script>
 
 <template>
@@ -101,34 +118,6 @@ const removeGroup = (g: CategoryGroup) => run(() => api.deleteCategoryGroup(g._i
     </CardHeader>
     <CardContent class="flex flex-col gap-6">
       <div class="flex flex-col gap-3">
-        <h3 class="text-sm font-medium">Groupes</h3>
-        <div class="flex flex-wrap items-center gap-2">
-          <span v-if="groups.length === 0" class="text-sm text-muted-foreground">Aucun groupe</span>
-          <Badge v-for="g in groups" :key="g._id" variant="outline" class="gap-1 pr-1">
-            {{ g.name }}
-            <span class="text-muted-foreground">· {{ countIn(g) }}</span>
-            <ConfirmDialog
-              :title="`Supprimer le groupe « ${g.name} » ?`"
-              description="Ses catégories sont conservées, sans groupe."
-              @confirm="removeGroup(g)"
-            >
-              <button
-                type="button"
-                class="rounded-full p-0.5 hover:bg-black/10"
-                :aria-label="`Supprimer ${g.name}`"
-              >
-                <X class="size-3" />
-              </button>
-            </ConfirmDialog>
-          </Badge>
-        </div>
-        <form class="flex flex-wrap gap-2" @submit.prevent="createGroup">
-          <Input v-model="groupName" placeholder="Nouveau groupe" required class="w-56" />
-          <Button type="submit" variant="outline">Ajouter le groupe</Button>
-        </form>
-      </div>
-
-      <div class="flex flex-col gap-3">
         <div class="flex items-center gap-2">
           <h3 class="mr-auto text-sm font-medium">Catégories</h3>
           <template v-if="groups.length > 0">
@@ -136,6 +125,33 @@ const removeGroup = (g: CategoryGroup) => run(() => api.deleteCategoryGroup(g._i
             <Label for="categories-by-group" class="font-normal">Regrouper par groupe</Label>
           </template>
         </div>
+        <form class="flex flex-wrap items-end gap-2" @submit.prevent="createCategory">
+          <div class="flex flex-col gap-2">
+            <Label for="category-name">Nom</Label>
+            <Input id="category-name" v-model="name" placeholder="Nouvelle catégorie" required class="w-56" />
+          </div>
+          <div class="flex flex-col gap-2">
+            <Label for="category-kind">Type</Label>
+            <OptionSelect id="category-kind" v-model="kind" :options="CATEGORY_KINDS" class="w-32" />
+          </div>
+          <div class="flex flex-col gap-2">
+            <div class="flex items-baseline justify-between gap-2">
+              <Label for="category-group">Groupe</Label>
+              <GroupManagerDialog :groups="groups" :categories="categories" @changed="emit('changed')" />
+            </div>
+            <OptionSelect id="category-group" v-model="groupSelect" :options="groupOptions" class="w-52">
+              <template #after>
+                <SelectSeparator />
+                <SelectItem :value="NEW_GROUP">
+                  <Plus />
+                  Nouveau groupe…
+                </SelectItem>
+              </template>
+            </OptionSelect>
+          </div>
+          <Button type="submit">Ajouter</Button>
+        </form>
+        <GroupCreateDialog v-model:open="creatingGroup" @created="onGroupCreated" />
         <Table>
           <TableHeader>
             <TableRow>
@@ -187,12 +203,6 @@ const removeGroup = (g: CategoryGroup) => run(() => api.deleteCategoryGroup(g._i
             <TableEmpty v-if="categories.length === 0" :colspan="4">Aucune catégorie</TableEmpty>
           </TableBody>
         </Table>
-        <form class="flex flex-wrap gap-2" @submit.prevent="createCategory">
-          <Input v-model="name" placeholder="Nouvelle catégorie" required class="w-56" />
-          <OptionSelect v-model="kind" :options="CATEGORY_KINDS" class="w-32" />
-          <OptionSelect v-model="group" :options="groupOptions" class="w-44" />
-          <Button type="submit">Ajouter</Button>
-        </form>
       </div>
     </CardContent>
   </Card>

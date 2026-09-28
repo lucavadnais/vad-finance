@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Transactions, newest first, one page at a time (paginated and searched by the backend)
 import type { Account, Category, Transaction } from '@/types';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
 import { refDebounced } from '@vueuse/core';
 import { api } from '@/api';
@@ -69,7 +69,11 @@ async function load() {
   }
 }
 
-// The parent refreshes on mount, which bumps the version: no immediate load
+// On app start, the first refresh bumps the version, which loads the page.
+// Back on this page later, the data is already there: load right away.
+onMounted(() => {
+  if (props.version > 0) load();
+});
 watch(() => props.version, load);
 watch(page, () => {
   if (syncingPage) syncingPage = false;

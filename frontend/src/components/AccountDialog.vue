@@ -35,12 +35,17 @@ const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportS
 const accountId = ref<string | undefined>(props.accounts.length === 1 ? props.accounts[0]._id : undefined);
 const account = computed(() => props.accounts.find((a) => a._id === accountId.value));
 
+// Our category named like the bank's one, ignoring case and accents
+const normalize = (name: string) =>
+  name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const categoryByName = new Map(props.categories.map((c) => [normalize(c.name), c._id]));
+
 // Editable copy of the parsed rows. `category` may be TRANSFER: the row is then
 // a transfer to or from `transferAccount`
 const rows = ref(
   props.result.transactions.map((t) => ({
     ...t,
-    category: null as string | null,
+    category: (t.bankCategory && categoryByName.get(normalize(t.bankCategory))) || null,
     transferAccount: undefined as string | undefined,
   })),
 );

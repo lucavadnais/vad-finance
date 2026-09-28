@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent } from 'vue';
 import { formatCents } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogoButton from '@/components/AccountLogoButton.vue';
 import CsvImport from '@/components/CsvImport.vue';
@@ -34,9 +34,13 @@ const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.bala
     <Card>
       <CardHeader>
         <CardTitle>Comptes — total {{ formatCents(totalCents) }}</CardTitle>
+        <CardAction>
+          <AccountForm @created="refresh" @error="setError" />
+        </CardAction>
       </CardHeader>
-      <CardContent class="flex flex-col gap-4">
-        <ul class="flex flex-col gap-2">
+      <CardContent>
+        <p v-if="accounts.length === 0" class="text-sm text-muted-foreground">Aucun compte pour l'instant.</p>
+        <ul v-else class="flex flex-col gap-2">
           <li v-for="a in accounts" :key="a._id" class="flex items-center gap-2 text-sm">
             <AccountLogoButton :account="a" @changed="refresh" @error="setError" />
             <span class="font-medium">{{ a.name }}</span>
@@ -44,7 +48,6 @@ const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.bala
             <span class="ml-auto tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
           </li>
         </ul>
-        <AccountForm @created="refresh" @error="setError" />
       </CardContent>
     </Card>
 

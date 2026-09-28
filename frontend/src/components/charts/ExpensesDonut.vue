@@ -15,7 +15,7 @@ import { tooltipTemplate } from './tooltip';
 const props = defineProps<{ rows: Row[]; series: Series[] }>();
 const emit = defineEmits<{ select: [selection: ChartSelection] }>();
 
-const MAX_SEGMENTS = 6;
+const MAX_SEGMENTS = 10;
 
 interface Segment extends Series {
   value: number;

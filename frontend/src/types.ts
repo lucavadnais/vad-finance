@@ -102,6 +102,8 @@ export interface ParsedTransaction {
   date: string;
   description: string;
   amountCents: number;
+  // The bank's own category, when its CSV has one (preselects ours if the names match)
+  bankCategory?: string;
   // Chosen in the import preview
   category?: string | null;
   // Transfer between own accounts: the other account

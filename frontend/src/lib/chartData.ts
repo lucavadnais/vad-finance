@@ -113,7 +113,7 @@ type Bucket = { key: string; label: string; t: number };
 
 function monthBucket(d: Date): Bucket {
   const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  const label = new Date(t).toLocaleDateString('fr-CA', { timeZone: 'UTC', month: 'short', year: '2-digit' });
+  const label = new Date(t).toLocaleDateString('fr-CA', { timeZone: 'UTC', month: 'short', year: 'numeric' });
   return { key: String(t), label, t };
 }
 

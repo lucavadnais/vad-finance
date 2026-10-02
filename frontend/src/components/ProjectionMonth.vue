@@ -1,34 +1,16 @@
 <script setup lang="ts">
-// Projections of the month picked in the next 12 months chart: its net, the
-// chart, then each expense and amount to receive by day, to edit or delete.
-// Each one is past, today or to come (always to come in a later month).
+// Projections of the month picked in the next 12 months chart: its net, then
+// the chart. "Gérer les prévisions" lists them all, to edit or delete.
 import type { Category, Projection } from '@/types';
 import type { Month } from '@/lib/projections';
 import { computed, defineAsyncComponent, ref } from 'vue';
-import { Pencil, Plus, RotateCcw, Trash2 } from '@lucide/vue';
+import { Plus, RotateCcw } from '@lucide/vue';
 import { api, formatCents } from '@/api';
-import {
-  currentMonth,
-  monthLabel,
-  occurrences,
-  recurrenceLabel,
-  sameMonth,
-  totals,
-} from '@/lib/projections';
-import { Badge } from '@/components/ui/badge';
+import { currentMonth, monthLabel, occurrences, sameMonth, totals } from '@/lib/projections';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableEmpty,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import ConfirmDialog from './ConfirmDialog.vue';
 import ProjectionDialog from './ProjectionDialog.vue';
+import ProjectionListDialog from './ProjectionListDialog.vue';
 
 // Charts pull in Unovis (~1 MB): load them in their own chunk
 const ProjectionsChart = defineAsyncComponent(() => import('./charts/ProjectionsChart.vue'));
@@ -42,20 +24,11 @@ const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
 const now = currentMonth();
 const isCurrent = computed(() => sameMonth(month.value, now));
-const today = new Date().getUTCDate();
 
-const list = computed(() => occurrences(props.projections, month.value));
-const sums = computed(() => totals(list.value));
+const sums = computed(() => totals(occurrences(props.projections, month.value)));
 
-const categoryName = (id: string | null) => props.categories.find((c) => c._id === id)?.name;
-
-// Only the current and later months can be shown (the chart starts now)
-function status(day: number) {
-  if (!isCurrent.value) return { label: 'À venir', variant: 'outline' as const };
-  if (day < today) return { label: 'Passée', variant: 'secondary' as const };
-  if (day === today) return { label: "Aujourd'hui", variant: 'default' as const };
-  return { label: 'À venir', variant: 'outline' as const };
-}
+// Dialog listing them all
+const listOpen = ref(false);
 
 // Dialog adding a projection, or editing `editing`
 const dialogOpen = ref(false);
@@ -92,7 +65,8 @@ async function remove(p: Projection) {
           <RotateCcw />
         </Button>
       </CardTitle>
-      <CardAction>
+      <CardAction class="flex flex-wrap items-center justify-end gap-2">
+        <Button v-if="projections.length > 0" variant="link" @click="listOpen = true">Gérer les prévisions</Button>
         <Button @click="openDialog(null)">
           <Plus />
           Prévision
@@ -120,61 +94,22 @@ async function remove(p: Projection) {
         </dl>
       </div>
 
-      <!-- Picks the month shown above and below it -->
-      <ProjectionsChart v-if="projections.length > 0" v-model="month" :projections="projections" />
+      <!-- Picks the month shown above it -->
+      <ProjectionsChart
+        v-if="projections.length > 0"
+        v-model="month"
+        :projections="projections"
+        :categories="categories"
+        @edit="openDialog"
+      />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead class="w-16">Jour</TableHead>
-            <TableHead>Nom</TableHead>
-            <TableHead>Statut</TableHead>
-            <TableHead class="text-right">Prévu</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow
-            v-for="o in list"
-            :key="o.projection._id"
-            :class="isCurrent && o.day < today && 'text-muted-foreground'"
-          >
-            <TableCell class="tabular-nums">{{ o.day }}</TableCell>
-            <TableCell>
-              <span class="font-medium">{{ o.projection.name }}</span>
-              <Badge v-if="categoryName(o.projection.category)" variant="outline" class="ml-2">
-                {{ categoryName(o.projection.category) }}
-              </Badge>
-              <div class="text-xs text-muted-foreground">{{ recurrenceLabel(o.projection) }}</div>
-            </TableCell>
-            <TableCell>
-              <Badge :variant="status(o.day).variant">{{ status(o.day).label }}</Badge>
-            </TableCell>
-            <TableCell
-              class="text-right tabular-nums"
-              :class="o.signedCents < 0 ? 'text-destructive' : 'text-emerald-600'"
-            >
-              {{ formatCents(o.signedCents) }}
-            </TableCell>
-            <TableCell class="w-0 text-right whitespace-nowrap">
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                :aria-label="`Modifier ${o.projection.name}`"
-                @click="openDialog(o.projection)"
-              >
-                <Pencil />
-              </Button>
-              <ConfirmDialog :title="`Supprimer « ${o.projection.name} » ?`" @confirm="remove(o.projection)">
-                <Button size="icon-sm" variant="ghost" :aria-label="`Supprimer ${o.projection.name}`">
-                  <Trash2 />
-                </Button>
-              </ConfirmDialog>
-            </TableCell>
-          </TableRow>
-          <TableEmpty v-if="list.length === 0" :colspan="5">Rien de prévu ce mois-là</TableEmpty>
-        </TableBody>
-      </Table>
+      <ProjectionListDialog
+        v-model:open="listOpen"
+        :projections="projections"
+        :categories="categories"
+        @edit="openDialog"
+        @remove="remove"
+      />
       <ProjectionDialog
         v-model:open="dialogOpen"
         :categories="categories"

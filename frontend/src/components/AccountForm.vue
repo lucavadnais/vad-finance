@@ -8,6 +8,7 @@ import { ACCOUNT_TYPES } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -109,36 +110,38 @@ async function submit() {
           <DialogDescription>Le solde initial est le solde avant la première transaction.</DialogDescription>
         </DialogHeader>
 
-        <div class="flex flex-col gap-2">
-          <Label for="account-name">Nom</Label>
-          <Input id="account-name" v-model="name" placeholder="BNC - Compte chèque" required />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
+        <DialogBody>
           <div class="flex flex-col gap-2">
-            <Label for="account-type">Type</Label>
-            <OptionSelect id="account-type" v-model="type" :options="ACCOUNT_TYPES" class="w-full" />
+            <Label for="account-name">Nom</Label>
+            <Input id="account-name" v-model="name" placeholder="BNC - Compte chèque" required />
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2">
+              <Label for="account-type">Type</Label>
+              <OptionSelect id="account-type" v-model="type" :options="ACCOUNT_TYPES" class="w-full" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <Label for="account-balance">Solde initial</Label>
+              <Input id="account-balance" v-model="initialBalance" inputmode="decimal" />
+            </div>
           </div>
           <div class="flex flex-col gap-2">
-            <Label for="account-balance">Solde initial</Label>
-            <Input id="account-balance" v-model="initialBalance" inputmode="decimal" />
-          </div>
-        </div>
-        <div class="flex flex-col gap-2">
-          <Label>Image <span class="font-normal text-muted-foreground">(facultative)</span></Label>
-          <div v-if="preview" class="flex w-fit items-center gap-1 rounded-md border px-1.5 py-1">
-            <img :src="preview" alt="Image du compte" class="size-6 rounded object-contain" />
-            <Button type="button" size="icon-xs" variant="ghost" aria-label="Retirer l'image" @click="setLogo(null)">
-              <X />
+            <Label>Image <span class="font-normal text-muted-foreground">(facultative)</span></Label>
+            <div v-if="preview" class="flex w-fit items-center gap-1 rounded-md border px-1.5 py-1">
+              <img :src="preview" alt="Image du compte" class="size-6 rounded object-contain" />
+              <Button type="button" size="icon-xs" variant="ghost" aria-label="Retirer l'image" @click="setLogo(null)">
+                <X />
+              </Button>
+            </div>
+            <Button v-else type="button" variant="outline" class="w-fit" @click="logoInput?.click()">
+              <ImagePlus />
+              Choisir une image
             </Button>
+            <input ref="logoInput" type="file" :accept="LOGO_TYPES.join(',')" hidden @change="onLogoChange" />
           </div>
-          <Button v-else type="button" variant="outline" class="w-fit" @click="logoInput?.click()">
-            <ImagePlus />
-            Choisir une image
-          </Button>
-          <input ref="logoInput" type="file" :accept="LOGO_TYPES.join(',')" hidden @change="onLogoChange" />
-        </div>
 
-        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        </DialogBody>
 
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)">

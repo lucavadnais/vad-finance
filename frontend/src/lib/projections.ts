@@ -1,7 +1,7 @@
 // Projected expenses and amounts to receive, month by month. Everything is in cents.
 import type { Projection } from '@/types';
 import { formatDate } from '@/api';
-import { RECURRENCES } from '@/lib/labels';
+import { RECURRENCE_UNITS } from '@/lib/labels';
 
 // A month, as its first day at midnight UTC (like the transactions' dates)
 export type Month = { year: number; month: number }; // month: 0-11
@@ -27,15 +27,47 @@ export function monthLabel({ year, month }: Month, style: 'long' | 'short' = 'lo
 
 const daysIn = ({ year, month }: Month) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
-export function occursIn(p: Projection, m: Month) {
-  if (p.recurrence === 'once') return p.month === m.month + 1 && p.year === m.year;
-  if (p.recurrence === 'yearly' && p.month !== m.month + 1) return false;
-  // Not past its end date
-  return !p.endDate || Date.UTC(m.year, m.month, landingDay(p, m)) <= Date.parse(p.endDate);
+const DAY = 24 * 60 * 60 * 1000;
+
+// Days of the month it lands on: none, one, or several for a weekly one
+export function landingDays(p: Projection, m: Month): number[] {
+  const start = new Date(p.startDate);
+  const first = Date.UTC(m.year, m.month, 1);
+  const last = Date.UTC(m.year, m.month, daysIn(m));
+  const end = p.recurrence !== 'once' && p.endDate ? Date.parse(p.endDate) : Infinity;
+  const days: number[] = [];
+
+  if (p.recurrence === 'weekly') {
+    // Every `interval` weeks from the start date, on the same weekday
+    const step = 7 * p.interval * DAY;
+    const t0 = start.getTime();
+    let t = t0 >= first ? t0 : t0 + Math.ceil((first - t0) / step) * step;
+    for (; t <= last && t <= end; t += step) days.push(new Date(t).getUTCDate());
+    return days;
+  }
+
+  // Months from the start date's month to this one
+  const elapsed = (m.year - start.getUTCFullYear()) * 12 + m.month - start.getUTCMonth();
+  const period = p.recurrence === 'once' ? 0 : p.recurrence === 'yearly' ? 12 * p.interval : p.interval;
+  const lands = period === 0 ? elapsed === 0 : elapsed >= 0 && elapsed % period === 0;
+  if (!lands) return days;
+  // The start date's day, or the month's last day if shorter
+  const day = Math.min(start.getUTCDate(), daysIn(m));
+  if (Date.UTC(m.year, m.month, day) <= end) days.push(day);
+  return days;
 }
 
-// Its day, or the month's last day if shorter
-const landingDay = (p: Projection, m: Month) => Math.min(p.dayOfMonth, daysIn(m));
+// Next day it lands on from `from` (today), as 'YYYY-MM-DD', looking up to 10
+// years ahead; null if it never lands again
+export function nextDate(p: Projection, from = new Date()): string | null {
+  const today = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  let m = currentMonth(from);
+  for (let i = 0; i < 120; i++, m = addMonths(m, 1)) {
+    const day = landingDays(p, m).find((d) => Date.UTC(m.year, m.month, d) >= today);
+    if (day) return new Date(Date.UTC(m.year, m.month, day)).toISOString().slice(0, 10);
+  }
+  return null;
+}
 
 export interface Occurrence {
   projection: Projection;
@@ -48,12 +80,13 @@ export interface Occurrence {
 // The projections falling in the month, by day then name
 export function occurrences(projections: Projection[], m: Month): Occurrence[] {
   return projections
-    .filter((p) => occursIn(p, m))
-    .map((p) => ({
-      projection: p,
-      day: landingDay(p, m),
-      signedCents: p.kind === 'expense' ? -p.amountCents : p.amountCents,
-    }))
+    .flatMap((p) =>
+      landingDays(p, m).map((day) => ({
+        projection: p,
+        day,
+        signedCents: p.kind === 'expense' ? -p.amountCents : p.amountCents,
+      })),
+    )
     .sort((a, b) => a.day - b.day || a.projection.name.localeCompare(b.projection.name, 'fr'));
 }
 
@@ -73,8 +106,15 @@ export function totals(list: Occurrence[]): MonthTotals {
   return { expenseCents, incomeCents, netCents: incomeCents - expenseCents };
 }
 
-// "Chaque mois", "Chaque année · jusqu'au 2027-03-15"
+const weekday = (date: string) =>
+  new Date(date).toLocaleDateString('fr-CA', { timeZone: 'UTC', weekday: 'long' });
+
+// "Une seule fois", "Chaque mois", "Aux 2 semaines (vendredi)",
+// "Aux 3 mois · jusqu'au 2027-03-15"
 export function recurrenceLabel(p: Projection) {
-  const label = RECURRENCES[p.recurrence];
-  return p.endDate && p.recurrence !== 'once' ? `${label} · jusqu'au ${formatDate(p.endDate)}` : label;
+  if (p.recurrence === 'once') return 'Une seule fois';
+  const [one, many] = RECURRENCE_UNITS[p.recurrence];
+  let label = p.interval === 1 ? `Chaque ${one}` : `Aux ${p.interval} ${many}`;
+  if (p.recurrence === 'weekly') label += ` (${weekday(p.startDate)})`;
+  return p.endDate ? `${label} · jusqu'au ${formatDate(p.endDate)}` : label;
 }

@@ -13,8 +13,8 @@ router.post('/', async (req, res) => {
   res.status(201).json(projection);
 });
 
-// The whole projection is sent back by the form: replace it, so the month and
-// year left over from another recurrence are cleared too
+// The whole projection is sent back by the form: replace it, so an end date
+// left over from a repeating one is cleared too
 router.put('/:id', async (req, res) => {
   const projection = await Projection.findById(req.params.id);
   if (!projection) return res.status(404).json({ error: 'Projection not found' });
@@ -22,14 +22,13 @@ router.put('/:id', async (req, res) => {
     name,
     kind,
     amountCents,
-    dayOfMonth,
     recurrence,
-    month = null,
-    year = null,
+    interval = 1,
+    startDate,
     endDate = null,
     category = null,
   } = req.body;
-  projection.set({ name, kind, amountCents, dayOfMonth, recurrence, month, year, endDate, category });
+  projection.set({ name, kind, amountCents, recurrence, interval, startDate, endDate, category });
   await projection.save();
   res.json(projection);
 });

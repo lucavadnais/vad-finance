@@ -6,6 +6,7 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -57,12 +58,14 @@ async function submit() {
           <DialogDescription>Rassemble plusieurs catégories pour l'analyse.</DialogDescription>
         </DialogHeader>
 
-        <div class="flex flex-col gap-2">
-          <Label for="group-name">Nom</Label>
-          <Input id="group-name" v-model="name" placeholder="Milieu de vie" required />
-        </div>
+        <DialogBody>
+          <div class="flex flex-col gap-2">
+            <Label for="group-name">Nom</Label>
+            <Input id="group-name" v-model="name" placeholder="Milieu de vie" required />
+          </div>
 
-        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        </DialogBody>
 
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)">

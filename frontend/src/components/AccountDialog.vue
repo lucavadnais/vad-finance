@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -140,89 +141,91 @@ async function submit() {
           </DialogDescription>
         </DialogHeader>
 
-        <div class="flex flex-col gap-2">
-          <Label for="import-account">Compte</Label>
-          <p v-if="accounts.length === 0" class="text-sm text-destructive">
-            Aucun compte : crée d'abord le compte dans la carte Comptes.
-          </p>
-          <AccountSelect v-else id="import-account" v-model="accountId" :accounts="accounts" class="w-72" />
-        </div>
+        <DialogBody>
+          <div class="flex flex-col gap-2">
+            <Label for="import-account">Compte</Label>
+            <p v-if="accounts.length === 0" class="text-sm text-destructive">
+              Aucun compte : crée d'abord le compte dans la carte Comptes.
+            </p>
+            <AccountSelect v-else id="import-account" v-model="accountId" :accounts="accounts" class="w-72" />
+          </div>
 
-        <ParseErrors :errors="result.errors" />
+          <ParseErrors :errors="result.errors" />
 
-        <div class="max-h-96 overflow-y-auto rounded-md border">
-          <Table>
-            <TableHeader class="sticky top-0 z-10 bg-background">
-              <TableRow>
-                <TableHead class="w-8" />
-                <TableHead>Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Catégorie</TableHead>
-                <TableHead class="text-right">Montant</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow
-                v-for="(t, i) in rows"
-                :key="i"
-                :class="!selected[i] && 'opacity-50'"
-              >
-                <TableCell>
-                  <Checkbox v-model="selected[i]" :aria-label="`Importer ${t.description}`" />
-                </TableCell>
-                <TableCell class="whitespace-nowrap">{{ t.date }}</TableCell>
-                <TableCell class="min-w-64 whitespace-normal">
-                  <Input v-model="t.description" :aria-label="`Description du ${t.date}`" class="h-8" />
-                  <div v-if="duplicates.get(i)" class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-                    <Badge :variant="duplicates.get(i)!.kind === 'exact' ? 'secondary' : 'outline'">
-                      {{ duplicates.get(i)!.kind === 'exact' ? 'Déjà présente' : 'Doublon possible' }}
-                    </Badge>
-                    <span class="text-muted-foreground">
-                      {{ formatDate(duplicates.get(i)!.match.date) }} · {{ duplicates.get(i)!.match.description }}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell class="space-y-1.5">
-                  <CategorySelect
-                    v-model="t.category"
-                    :categories="categories"
-                    :allow-transfer="accounts.length > 1"
-                    class="h-8 w-44"
-                  />
-                  <AccountSelect
-                    v-if="t.category === TRANSFER"
-                    v-model="t.transferAccount"
-                    :accounts="otherAccounts"
-                    :placeholder="t.amountCents < 0 ? 'Vers le compte' : 'Du compte'"
-                    class="h-8 w-44"
-                  />
-                </TableCell>
-                <TableCell
-                  class="text-right whitespace-nowrap tabular-nums"
-                  :class="t.amountCents < 0 ? 'text-destructive' : 'text-emerald-600'"
+          <div class="min-h-40 shrink overflow-y-auto rounded-md border">
+            <Table>
+              <TableHeader class="sticky top-0 z-10 bg-background">
+                <TableRow>
+                  <TableHead class="w-8" />
+                  <TableHead>Date</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Catégorie</TableHead>
+                  <TableHead class="text-right">Montant</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow
+                  v-for="(t, i) in rows"
+                  :key="i"
+                  :class="!selected[i] && 'opacity-50'"
                 >
-                  {{ formatCents(t.amountCents) }}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
+                  <TableCell>
+                    <Checkbox v-model="selected[i]" :aria-label="`Importer ${t.description}`" />
+                  </TableCell>
+                  <TableCell class="whitespace-nowrap">{{ t.date }}</TableCell>
+                  <TableCell class="min-w-64 whitespace-normal">
+                    <Input v-model="t.description" :aria-label="`Description du ${t.date}`" class="h-8" />
+                    <div v-if="duplicates.get(i)" class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                      <Badge :variant="duplicates.get(i)!.kind === 'exact' ? 'secondary' : 'outline'">
+                        {{ duplicates.get(i)!.kind === 'exact' ? 'Déjà présente' : 'Doublon possible' }}
+                      </Badge>
+                      <span class="text-muted-foreground">
+                        {{ formatDate(duplicates.get(i)!.match.date) }} · {{ duplicates.get(i)!.match.description }}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell class="space-y-1.5">
+                    <CategorySelect
+                      v-model="t.category"
+                      :categories="categories"
+                      :allow-transfer="accounts.length > 1"
+                      class="h-8 w-44"
+                    />
+                    <AccountSelect
+                      v-if="t.category === TRANSFER"
+                      v-model="t.transferAccount"
+                      :accounts="otherAccounts"
+                      :placeholder="t.amountCents < 0 ? 'Vers le compte' : 'Du compte'"
+                      class="h-8 w-44"
+                    />
+                  </TableCell>
+                  <TableCell
+                    class="text-right whitespace-nowrap tabular-nums"
+                    :class="t.amountCents < 0 ? 'text-destructive' : 'text-emerald-600'"
+                  >
+                    {{ formatCents(t.amountCents) }}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
 
-        <p class="text-sm text-muted-foreground">
-          <template v-if="!account">Choisis le compte pour vérifier les doublons.</template>
-          <template v-else-if="checking">Recherche des doublons…</template>
-          <template v-else>
-            {{ selectedCount }} transaction(s) sur {{ count }} seront ajoutées à « {{ account.name }} ».
-            <template v-if="exactCount > 0">
-              {{ exactCount }} déjà présente(s), décochée(s).
+          <p class="text-sm text-muted-foreground">
+            <template v-if="!account">Choisis le compte pour vérifier les doublons.</template>
+            <template v-else-if="checking">Recherche des doublons…</template>
+            <template v-else>
+              {{ selectedCount }} transaction(s) sur {{ count }} seront ajoutées à « {{ account.name }} ».
+              <template v-if="exactCount > 0">
+                {{ exactCount }} déjà présente(s), décochée(s).
+              </template>
+              <template v-if="possibleCount > 0">
+                {{ possibleCount }} doublon(s) possible(s) à vérifier : décoche celles déjà saisies.
+              </template>
             </template>
-            <template v-if="possibleCount > 0">
-              {{ possibleCount }} doublon(s) possible(s) à vérifier : décoche celles déjà saisies.
-            </template>
-          </template>
-        </p>
+          </p>
 
-        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        </DialogBody>
 
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')">

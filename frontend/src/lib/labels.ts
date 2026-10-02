@@ -21,11 +21,15 @@ export const PROJECTION_KINDS: Record<CategoryKind, string> = {
 };
 
 export const RECURRENCES: Record<Recurrence, string> = {
-  monthly: 'Chaque mois',
-  yearly: 'Chaque année',
   once: 'Une seule fois',
+  weekly: 'Hebdomadaire',
+  monthly: 'Mensuelle',
+  yearly: 'Annuelle',
 };
 
-export const MONTHS = Array.from({ length: 12 }, (_, i) =>
-  new Date(Date.UTC(2000, i, 1)).toLocaleDateString('fr-CA', { timeZone: 'UTC', month: 'long' }),
-);
+// The unit of "Aux X …" for a repeating one, singular and plural
+export const RECURRENCE_UNITS: Record<Exclude<Recurrence, 'once'>, [string, string]> = {
+  weekly: ['semaine', 'semaines'],
+  monthly: ['mois', 'mois'],
+  yearly: ['année', 'ans'],
+};

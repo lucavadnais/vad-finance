@@ -7,6 +7,7 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -83,54 +84,56 @@ const remove = (group: CategoryGroup) => run(() => api.deleteCategoryGroup(group
         </DialogDescription>
       </DialogHeader>
 
-      <p v-if="groups.length === 0" class="text-sm text-muted-foreground">Aucun groupe</p>
-      <ul v-else class="flex max-h-96 flex-col gap-1 overflow-y-auto">
-        <li v-for="g in groups" :key="g._id" class="flex min-h-9 items-center gap-2">
-          <form v-if="editingId === g._id" class="flex flex-1 items-center gap-1" @submit.prevent="saveEdit(g)">
-            <Input
-              :id="`group-edit-${g._id}`"
-              v-model="editName"
-              required
-              :aria-label="`Nouveau nom de ${g.name}`"
-              class="h-8"
-              @keydown.esc.stop="editingId = null"
-            />
-            <Button type="submit" size="icon-sm" :disabled="saving" aria-label="Enregistrer">
-              <Check />
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              :disabled="saving"
-              aria-label="Annuler"
-              @click="editingId = null"
-            >
-              <X />
-            </Button>
-          </form>
-          <template v-else>
-            <span class="flex-1 text-sm">
-              {{ g.name }}
-              <span class="text-muted-foreground">· {{ countIn(g) }}</span>
-            </span>
-            <Button size="icon-sm" variant="ghost" :disabled="saving" :aria-label="`Renommer ${g.name}`" @click="startEdit(g)">
-              <Pencil />
-            </Button>
-            <ConfirmDialog
-              :title="`Supprimer le groupe « ${g.name} » ?`"
-              description="Ses catégories sont conservées, sans groupe."
-              @confirm="remove(g)"
-            >
-              <Button size="icon-sm" variant="ghost" :disabled="saving" :aria-label="`Supprimer ${g.name}`">
-                <Trash2 />
+      <DialogBody>
+        <p v-if="groups.length === 0" class="text-sm text-muted-foreground">Aucun groupe</p>
+        <ul v-else class="flex flex-col gap-1">
+          <li v-for="g in groups" :key="g._id" class="flex min-h-9 items-center gap-2">
+            <form v-if="editingId === g._id" class="flex flex-1 items-center gap-1" @submit.prevent="saveEdit(g)">
+              <Input
+                :id="`group-edit-${g._id}`"
+                v-model="editName"
+                required
+                :aria-label="`Nouveau nom de ${g.name}`"
+                class="h-8"
+                @keydown.esc.stop="editingId = null"
+              />
+              <Button type="submit" size="icon-sm" :disabled="saving" aria-label="Enregistrer">
+                <Check />
               </Button>
-            </ConfirmDialog>
-          </template>
-        </li>
-      </ul>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                :disabled="saving"
+                aria-label="Annuler"
+                @click="editingId = null"
+              >
+                <X />
+              </Button>
+            </form>
+            <template v-else>
+              <span class="flex-1 text-sm">
+                {{ g.name }}
+                <span class="text-muted-foreground">· {{ countIn(g) }}</span>
+              </span>
+              <Button size="icon-sm" variant="ghost" :disabled="saving" :aria-label="`Renommer ${g.name}`" @click="startEdit(g)">
+                <Pencil />
+              </Button>
+              <ConfirmDialog
+                :title="`Supprimer le groupe « ${g.name} » ?`"
+                description="Ses catégories sont conservées, sans groupe."
+                @confirm="remove(g)"
+              >
+                <Button size="icon-sm" variant="ghost" :disabled="saving" :aria-label="`Supprimer ${g.name}`">
+                  <Trash2 />
+                </Button>
+              </ConfirmDialog>
+            </template>
+          </li>
+        </ul>
 
-      <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+      </DialogBody>
     </DialogContent>
   </Dialog>
 </template>

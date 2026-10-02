@@ -23,7 +23,7 @@ function onSaved() {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+    <DialogContent class="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>{{ projection ? `Modifier « ${projection.name} »` : 'Nouvelle prévision' }}</DialogTitle>
         <DialogDescription>

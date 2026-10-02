@@ -100,7 +100,7 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
         <p class="font-medium">
           {{ loading ? 'Lecture en cours…' : fileName || 'Glisse ton relevé CSV ici' }}
         </p>
-        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground">ou clique pour le choisir</p>
+        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground">Banques supportées : CIBC & BNC</p>
         <input ref="input" type="file" accept=".csv,text/csv" hidden @change="onChange" />
       </div>
 

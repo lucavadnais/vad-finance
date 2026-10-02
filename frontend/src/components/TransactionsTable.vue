@@ -3,7 +3,7 @@
 import type { Account, Category, Transaction } from '@/types';
 import { computed, onMounted, ref, watch } from 'vue';
 import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
-import { refDebounced } from '@vueuse/core';
+import { refDebounced, useMediaQuery } from '@vueuse/core';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +26,9 @@ import {
 } from '@/components/ui/table';
 import OptionSelect from './OptionSelect.vue';
 import TransactionRow from './TransactionRow.vue';
+
+// On a phone, fewer page numbers so the pagination fits
+const wide = useMediaQuery('(min-width: 640px)');
 
 const props = defineProps<{
   accounts: Account[];
@@ -163,7 +166,7 @@ const range = computed(() => {
           v-model:page="page"
           :items-per-page="Number(pageSize)"
           :total="total"
-          :sibling-count="1"
+          :sibling-count="wide ? 1 : 0"
           show-edges
           class="ml-auto w-auto"
         >

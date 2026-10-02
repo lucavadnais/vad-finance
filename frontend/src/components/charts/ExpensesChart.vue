@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Spending per bucket (week or month), stacked by category
+// Spending per bucket (day, week or month), stacked by category
 import type { ChartConfig } from '@/components/ui/chart';
 import type { ChartSelection, Row, Series } from '@/lib/chartData';
 import type { Transaction } from '@/types';
@@ -42,6 +42,8 @@ const tickValues = computed(() => {
   const every = Math.ceil(props.rows.length / 12);
   return props.rows.map((_, i) => i).filter((i) => i % every === 0);
 });
+// Half a bar slot on each side, so the first and last bars are not cut by the edges
+const xDomain = computed<[number, number]>(() => [-0.5, props.rows.length - 0.5]);
 const tickLabel = (i: number) => {
   const row = props.rows[Math.round(i)];
   return row ? (props.formatTick?.(row) ?? row.label) : '';
@@ -95,7 +97,7 @@ const barEvents = {
         <template v-else>
           <TabsContent value="chart">
             <ChartContainer :config="config" class="aspect-auto h-72">
-              <VisXYContainer :data="rows" :margin="{ left: 8, right: 8 }">
+              <VisXYContainer :data="rows" :x-domain="xDomain" :margin="{ left: 8, right: 8 }">
                 <VisStackedBar
                   :x="(_: Row, i: number) => i"
                   :y="y"

@@ -9,6 +9,7 @@ import {
   balanceOverTime,
   bucketStart,
   expenseSeries,
+  expensesByDay,
   expensesByMonth,
   expensesByWeek,
   isExpense,
@@ -34,15 +35,28 @@ const from = computed(() => periodStart(period.value));
 // Count grouped categories under their group (e.g. "Milieu de vie")
 const grouped = ref(false);
 const expenses = computed(() =>
-  expenseSeries(props.transactions, props.categories, props.groups, grouped.value),
+  expenseSeries(props.transactions, props.categories, props.groups, grouped.value, from.value),
 );
-// Spending bucketed by week (Monday to Sunday) or by month
-const granularity = ref<Granularity>('week');
-const expenseRows = computed(() =>
-  granularity.value === 'week'
-    ? expensesByWeek(props.transactions, expenses.value, from.value)
-    : expensesByMonth(props.transactions, expenses.value, from.value),
-);
+// Spending bucketed by week (Monday to Sunday) or month, as picked. This week
+// is by day instead: the "Jour" option then shows up, active, and week and
+// month are greyed out.
+const picked = ref<Exclude<Granularity, 'day'>>('week');
+const byDay = computed(() => period.value === 'week');
+const granularity = computed<Granularity>({
+  get: () => (byDay.value ? 'day' : picked.value),
+  set: (g) => {
+    if (g !== 'day') picked.value = g;
+  },
+});
+const BY = { day: expensesByDay, week: expensesByWeek, month: expensesByMonth };
+const expenseRows = computed(() => BY[granularity.value](props.transactions, expenses.value, from.value));
+
+const DESCRIPTIONS: Record<Granularity, string> = {
+  day: 'Dépenses de chaque jour, par catégorie.',
+  week: 'Dépenses de chaque semaine (du lundi au dimanche), par catégorie.',
+  month: 'Dépenses de chaque mois, par catégorie.',
+};
+const BUCKET_LABELS: Record<Granularity, string> = { day: 'Jour', week: 'Semaine', month: 'Mois' };
 
 // Clicked bar segment or donut slice, and the expenses behind it
 const selection = ref<ChartSelection | null>(null);
@@ -65,6 +79,10 @@ const selectedTransactions = computed(() => {
 
 const formatWeekTick = (row: Row) =>
   new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+// "lun. 28"
+const formatDayTick = (row: Row) =>
+  new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', weekday: 'short', day: 'numeric' });
+const TICKS: Partial<Record<Granularity, (row: Row) => string>> = { day: formatDayTick, week: formatWeekTick };
 
 const perAccount = computed(() => accountSeries(props.accounts));
 const balance = computed(() =>
@@ -86,15 +104,11 @@ const balance = computed(() =>
 
     <ExpensesChart
       title="Dépenses"
-      :description="
-        granularity === 'week'
-          ? 'Dépenses de chaque semaine (du lundi au dimanche), par catégorie.'
-          : 'Dépenses de chaque mois, par catégorie.'
-      "
+      :description="DESCRIPTIONS[granularity]"
       :rows="expenseRows"
       :series="expenses.series"
-      :bucket-label="granularity === 'week' ? 'Semaine' : 'Mois'"
-      :format-tick="granularity === 'week' ? formatWeekTick : undefined"
+      :bucket-label="BUCKET_LABELS[granularity]"
+      :format-tick="TICKS[granularity]"
       :selection="selection"
       :selected-transactions="selectedTransactions"
       @select="selection = $event"
@@ -102,8 +116,9 @@ const balance = computed(() =>
       <template #actions>
         <Tabs v-model="granularity">
           <TabsList>
-            <TabsTrigger value="week">Semaine</TabsTrigger>
-            <TabsTrigger value="month">Mois</TabsTrigger>
+            <TabsTrigger v-if="byDay" value="day">Jour</TabsTrigger>
+            <TabsTrigger value="week" :disabled="byDay">Semaine</TabsTrigger>
+            <TabsTrigger value="month" :disabled="byDay">Mois</TabsTrigger>
           </TabsList>
         </Tabs>
       </template>

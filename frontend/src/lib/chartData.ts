@@ -58,15 +58,18 @@ export interface ExpenseSeries {
 }
 
 // Expense series, one per category - or per group of categories when `grouped`
-// is on (categories without a group stay on their own). Colors follow the
-// entity, not the period: the entities with the most spending over all time get
-// the slots (ordered by name), the tail folds into "Autres", and uncategorized
+// is on (categories without a group stay on their own) - spent on since
+// `from`, by name. Colors follow the entity, not the period: the entities with
+// the most spending over all time own the slots. Others spent on in the period
+// borrow a slot left free by the owners absent from it, and only fold into
+// "Autres" when the period has more entities than slots. Uncategorized
 // spending is gray.
 export function expenseSeries(
   transactions: Transaction[],
   categories: Category[],
   groups: CategoryGroup[],
   grouped: boolean,
+  from: Date | null = null,
 ): ExpenseSeries {
   const groupById = new Map(groups.map((g) => [g._id, g]));
   const entityOf = new Map<string, Entity>();
@@ -75,36 +78,51 @@ export function expenseSeries(
     entityOf.set(c._id, g ? { key: `group:${g._id}`, label: g.name } : { key: c._id, label: c.name });
   }
 
+  // Spending per entity over all time, and the entities spent on in the period
   const spent = new Map<string, number>();
   const entities = new Map<string, Entity>();
+  const inPeriod = new Set<string>();
   let uncategorized = false;
   for (const t of transactions) {
     if (!isExpense(t)) continue;
     const entity = t.category && entityOf.get(t.category._id);
+    const counted = !from || new Date(t.date) >= from;
     if (!entity) {
-      uncategorized = true;
+      uncategorized ||= counted;
       continue;
     }
     entities.set(entity.key, entity);
     spent.set(entity.key, (spent.get(entity.key) ?? 0) - t.amountCents);
+    if (counted) inPeriod.add(entity.key);
   }
 
-  const used = [...entities.values()];
-  const keep = used.length > SLOTS ? SLOTS - 1 : SLOTS;
-  const top = used
-    .sort((a, b) => spent.get(b.key)! - spent.get(a.key)!)
-    .slice(0, keep)
-    .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-  const kept = new Set(top.map((e) => e.key));
+  // Slot owners: the top spenders over all time
+  const byName = (a: Entity, b: Entity) => a.label.localeCompare(b.label, 'fr');
+  const ranked = [...entities.values()].sort((a, b) => spent.get(b.key)! - spent.get(a.key)!);
+  const owners = ranked.slice(0, ranked.length > SLOTS ? SLOTS - 1 : SLOTS).sort(byName);
+  const slotOf = new Map(owners.map((e, i) => [e.key, i]));
 
-  const series: Series[] = top.map((e, i) => ({ ...e, color: slot(i) }));
-  if (used.length > keep) series.push({ key: OTHER_KEY, label: 'Autres', color: 'var(--series-other)' });
+  // The period's entities: owners keep their slot, the others borrow a free one
+  // while there are enough for all of them
+  const present = [...inPeriod].map((k) => entities.get(k)!);
+  const guests = present.filter((e) => !slotOf.has(e.key)).sort(byName);
+  const taken = new Set(present.flatMap((e) => (slotOf.has(e.key) ? [slotOf.get(e.key)!] : [])));
+  const free = Array.from({ length: SLOTS }, (_, i) => i).filter((i) => !taken.has(i));
+  const color = new Map([...slotOf].filter(([k]) => inPeriod.has(k)));
+  const foldGuests = present.length > SLOTS;
+  if (!foldGuests) guests.forEach((e, i) => color.set(e.key, free[i]!));
+
+  const series: Series[] = present
+    .filter((e) => color.has(e.key))
+    .sort(byName)
+    .map((e) => ({ ...e, color: slot(color.get(e.key)!) }));
+  if (foldGuests) series.push({ key: OTHER_KEY, label: 'Autres', color: 'var(--series-other)' });
   if (uncategorized) series.push({ key: NONE_KEY, label: 'Sans catégorie', color: 'var(--series-none)' });
 
   const keyOf = (t: Transaction) => {
     const entity = t.category && entityOf.get(t.category._id);
     if (!entity) return NONE_KEY;
-    return kept.has(entity.key) ? entity.key : OTHER_KEY;
+    return color.has(entity.key) ? entity.key : OTHER_KEY;
   };
   return { series, keyOf };
 }
@@ -114,6 +132,17 @@ type Bucket = { key: string; label: string; t: number };
 function monthBucket(d: Date): Bucket {
   const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
   const label = new Date(t).toLocaleDateString('fr-CA', { timeZone: 'UTC', month: 'short', year: 'numeric' });
+  return { key: String(t), label, t };
+}
+
+function dayBucket(d: Date): Bucket {
+  const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const label = new Date(t).toLocaleDateString('fr-CA', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+  });
   return { key: String(t), label, t };
 }
 
@@ -169,22 +198,27 @@ function expensesBy(
   return [...rows.values()];
 }
 
-export type Granularity = 'week' | 'month';
+export type Granularity = 'day' | 'week' | 'month';
 
 // A clicked bar segment or donut slice: the series it stands for (several for
-// a merged "Autres") and, for a bar, the week or month it covers
+// a merged "Autres") and, for a bar, the day, week or month it covers
 export interface ChartSelection {
   keys: string[];
   label: string;
   bucket?: number;
 }
 
-// Start (UTC ms) of the week or month a date falls in: the `t` of its row
+const BUCKETS = { day: dayBucket, week: weekBucket, month: monthBucket };
+
+// Start (UTC ms) of the day, week or month a date falls in: the `t` of its row
 export const bucketStart = (date: string | Date, granularity: Granularity) =>
-  (granularity === 'week' ? weekBucket : monthBucket)(new Date(date)).t;
+  BUCKETS[granularity](new Date(date)).t;
 
 export const expensesByMonth = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
   expensesBy(monthBucket, (b) => addMonths(b, 1), tx, s, from, now);
+
+export const expensesByDay = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
+  expensesBy(dayBucket, (b) => addDays(b, 1), tx, s, from, now);
 
 export const expensesByWeek = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
   expensesBy(weekBucket, (b) => addDays(b, 7), tx, s, from, now);

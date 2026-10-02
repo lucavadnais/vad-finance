@@ -48,6 +48,28 @@ export interface TransactionPage {
   pageSize: number;
 }
 
+export type Recurrence = 'monthly' | 'yearly' | 'once';
+
+// A planned expense, or an amount to receive (kind 'income'), on a day of the month
+export interface Projection {
+  _id: string;
+  name: string;
+  kind: CategoryKind;
+  // Always positive: the kind gives the direction
+  amountCents: number;
+  dayOfMonth: number;
+  recurrence: Recurrence;
+  // 1-12, for 'yearly' and 'once'
+  month: number | null;
+  // For 'once'
+  year: number | null;
+  // Repeating ones: last day it can land on (ISO date), null = no end
+  endDate: string | null;
+  category: string | null;
+}
+
+export type ProjectionInput = Omit<Projection, '_id'>;
+
 export interface TransactionInput {
   account: string;
   category?: string | null;

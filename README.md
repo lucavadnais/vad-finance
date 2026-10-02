@@ -66,7 +66,7 @@ backend/
   src/
     index.js          # point d'entrée Express
     db.js             # connexion MongoDB
-    models/           # schémas Mongoose (Account, Category, Transaction)
+    models/           # schémas Mongoose (Account, Category, Transaction, Projection…)
     routes/           # routes REST /api/*
 frontend/
   src/
@@ -99,6 +99,8 @@ frontend/
 | POST                | `/api/transfers/link`   | Lie deux transactions existantes (`{ ids: [a, b] }`) |
 | POST                | `/api/transfers/ignore` | Ne plus proposer une paire                         |
 | DELETE              | `/api/transfers/link/:id` | Délie les deux côtés                             |
+| GET / POST          | `/api/projections`      | Prévisions : dépenses prévues (`kind: expense`) et comptes à recevoir (`income`), un jour du mois, `recurrence` `monthly` / `yearly` (+ `month`) / `once` (+ `month`, `year`), `endDate` facultative (récurrentes), catégorie facultative |
+| PUT / DELETE        | `/api/projections/:id`  | PUT remplace toute la prévision                    |
 
 Les montants sont stockés en **cents** (entiers) pour éviter les erreurs d'arrondi.
 Une transaction positive est un revenu, une négative une dépense.

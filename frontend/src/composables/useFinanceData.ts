@@ -4,6 +4,7 @@ import type {
   Category,
   CategoryGroup,
   DuplicatePair,
+  Projection,
   Transaction,
   TransferCandidate,
 } from '@/types';
@@ -17,19 +18,21 @@ const categoryGroups = ref<CategoryGroup[]>([]);
 const transactions = ref<Transaction[]>([]);
 // Bumped on each refresh so the transactions table reloads its page
 const dataVersion = ref(0);
+const projections = ref<Projection[]>([]);
 const transferCandidates = ref<TransferCandidate[]>([]);
 const duplicatePairs = ref<DuplicatePair[]>([]);
 const error = ref('');
 
 async function refresh() {
   try {
-    const [a, c, g, t, tc, d] = await Promise.all([
+    const [a, c, g, t, tc, d, p] = await Promise.all([
       api.getAccounts(),
       api.getCategories(),
       api.getCategoryGroups(),
       api.getTransactions(),
       api.getTransferCandidates(),
       api.getDuplicates(),
+      api.getProjections(),
     ]);
     accounts.value = a;
     categories.value = c;
@@ -38,6 +41,7 @@ async function refresh() {
     dataVersion.value++;
     transferCandidates.value = tc;
     duplicatePairs.value = d;
+    projections.value = p;
     error.value = '';
   } catch (err) {
     error.value = (err as Error).message;
@@ -57,6 +61,7 @@ export function useFinanceData() {
     dataVersion,
     transferCandidates,
     duplicatePairs,
+    projections,
     error,
     refresh,
     setError,

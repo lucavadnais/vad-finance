@@ -7,6 +7,7 @@ import categoryGroupsRouter from './routes/categoryGroups.js';
 import transactionsRouter from './routes/transactions.js';
 import transfersRouter from './routes/transfers.js';
 import duplicatesRouter from './routes/duplicates.js';
+import projectionsRouter from './routes/projections.js';
 
 const app = express();
 app.use(cors());
@@ -19,6 +20,7 @@ app.use('/api/category-groups', categoryGroupsRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/transfers', transfersRouter);
 app.use('/api/duplicates', duplicatesRouter);
+app.use('/api/projections', projectionsRouter);
 
 // Express 5 forwards rejected promises from async handlers here
 app.use((err, req, res, next) => {

@@ -9,6 +9,8 @@ import type {
   ImportSummary,
   ParsedCsv,
   ParsedTransaction,
+  Projection,
+  ProjectionInput,
   Transaction,
   TransactionInput,
   TransactionPage,
@@ -90,6 +92,11 @@ export const api = {
   getDuplicates: () => request<DuplicatePair[]>('/duplicates'),
   ignoreDuplicate: (ids: [string, string]) =>
     request<null>('/duplicates/ignore', { method: 'POST', body: { ids } }),
+  getProjections: () => request<Projection[]>('/projections'),
+  createProjection: (body: ProjectionInput) => request<Projection>('/projections', { method: 'POST', body }),
+  updateProjection: (id: string, body: ProjectionInput) =>
+    request<Projection>(`/projections/${id}`, { method: 'PUT', body }),
+  deleteProjection: (id: string) => request<null>(`/projections/${id}`, { method: 'DELETE' }),
   importTransactions: (body: { account: string; transactions: ParsedTransaction[]; allowDuplicates?: boolean }) =>
     request<ImportSummary>('/transactions/import', { method: 'POST', body }),
 };

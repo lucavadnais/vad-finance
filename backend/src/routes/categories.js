@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { FRENCH } from '../db.js';
 import Category from '../models/Category.js';
+import Projection from '../models/Projection.js';
 import Transaction from '../models/Transaction.js';
 
 const router = Router();
@@ -28,6 +29,7 @@ router.delete('/:id', async (req, res) => {
   const category = await Category.findByIdAndDelete(req.params.id);
   if (!category) return res.status(404).json({ error: 'Category not found' });
   await Transaction.updateMany({ category: category._id }, { $unset: { category: 1 } });
+  await Projection.updateMany({ category: category._id }, { category: null });
   res.status(204).end();
 });
 

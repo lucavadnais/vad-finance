@@ -25,6 +25,7 @@ const props = defineProps<{
   categories: Category[];
   // Adds a "Transfert" choice, for transactions between own accounts
   allowTransfer?: boolean;
+  id?: string;
   class?: HTMLAttributes['class'];
 }>();
 
@@ -44,7 +45,7 @@ const groups = computed(() =>
 
 <template>
   <Select v-model="value">
-    <SelectTrigger :class="props.class">
+    <SelectTrigger :id="id" :class="props.class">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>

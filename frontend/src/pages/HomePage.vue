@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue';
+import type { Month } from '@/lib/projections';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { formatCents } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
+import { currentMonth } from '@/lib/projections';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogoButton from '@/components/AccountLogoButton.vue';
 import CsvImport from '@/components/CsvImport.vue';
 import DuplicateReview from '@/components/DuplicateReview.vue';
+import ProjectionMonth from '@/components/ProjectionMonth.vue';
 import TransactionsTable from '@/components/TransactionsTable.vue';
 import TransferSuggestions from '@/components/TransferSuggestions.vue';
 
@@ -22,11 +25,15 @@ const {
   dataVersion,
   transferCandidates,
   duplicatePairs,
+  projections,
   refresh,
   setError,
 } = useFinanceData();
 
 const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
+
+// Projected month shown in detail; its chart picks it too
+const projectionMonth = ref<Month>(currentMonth());
 </script>
 
 <template>
@@ -50,6 +57,14 @@ const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.bala
         </ul>
       </CardContent>
     </Card>
+
+    <ProjectionMonth
+      v-model="projectionMonth"
+      :projections="projections"
+      :categories="categories"
+      @changed="refresh"
+      @error="setError"
+    />
 
     <DashboardCharts
       :transactions="transactions"

@@ -1,6 +1,6 @@
 import type {
   Account,
-  AccountType,
+  AccountInput,
   Category,
   CategoryGroup,
   CategoryKind,
@@ -41,8 +41,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export const api = {
   getAccounts: () => request<Account[]>('/accounts'),
-  createAccount: (body: { name: string; type: AccountType; initialBalanceCents?: number }) =>
-    request<Account>('/accounts', { method: 'POST', body }),
+  createAccount: (body: AccountInput) => request<Account>('/accounts', { method: 'POST', body }),
+  updateAccount: (id: string, body: AccountInput) => request<Account>(`/accounts/${id}`, { method: 'PUT', body }),
+  // Without moveTo, the account's transactions are deleted with it
+  deleteAccount: (id: string, move?: { to: string; initialBalance: boolean }) =>
+    request<null>(
+      `/accounts/${id}` +
+        (move ? `?moveTo=${encodeURIComponent(move.to)}&moveInitialBalance=${move.initialBalance ? 1 : 0}` : ''),
+      { method: 'DELETE' },
+    ),
   uploadAccountLogo: (id: string, file: File) =>
     request<Account>(`/accounts/${id}/logo`, {
       method: 'PUT',
@@ -57,8 +64,7 @@ export const api = {
     request<Category>(`/categories/${id}`, { method: 'PUT', body }),
   deleteCategory: (id: string) => request<null>(`/categories/${id}`, { method: 'DELETE' }),
   getCategoryGroups: () => request<CategoryGroup[]>('/category-groups'),
-  createCategoryGroup: (body: { name: string }) =>
-    request<CategoryGroup>('/category-groups', { method: 'POST', body }),
+  createCategoryGroup: (body: { name: string }) => request<CategoryGroup>('/category-groups', { method: 'POST', body }),
   updateCategoryGroup: (id: string, body: { name: string }) =>
     request<CategoryGroup>(`/category-groups/${id}`, { method: 'PUT', body }),
   deleteCategoryGroup: (id: string) => request<null>(`/category-groups/${id}`, { method: 'DELETE' }),
@@ -69,17 +75,14 @@ export const api = {
     request<TransactionPage>(
       `/transactions?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), q })}`,
     ),
-  createTransaction: (body: TransactionInput) =>
-    request<Transaction>('/transactions', { method: 'POST', body }),
+  createTransaction: (body: TransactionInput) => request<Transaction>('/transactions', { method: 'POST', body }),
   updateTransaction: (id: string, body: TransactionInput) =>
     request<Transaction>(`/transactions/${id}`, { method: 'PUT', body }),
   deleteTransaction: (id: string) => request<null>(`/transactions/${id}`, { method: 'DELETE' }),
   getTransferCandidates: () => request<TransferCandidate[]>('/transfers/candidates'),
   createTransfer: (body: TransferInput) => request<unknown>('/transfers', { method: 'POST', body }),
-  linkTransfer: (ids: [string, string]) =>
-    request<null>('/transfers/link', { method: 'POST', body: { ids } }),
-  ignoreTransfer: (ids: [string, string]) =>
-    request<null>('/transfers/ignore', { method: 'POST', body: { ids } }),
+  linkTransfer: (ids: [string, string]) => request<null>('/transfers/link', { method: 'POST', body: { ids } }),
+  ignoreTransfer: (ids: [string, string]) => request<null>('/transfers/ignore', { method: 'POST', body: { ids } }),
   unlinkTransfer: (id: string) => request<null>(`/transfers/link/${id}`, { method: 'DELETE' }),
   parseTransactionsCsv: (file: File) =>
     request<ParsedCsv>('/transactions/parse-csv', {
@@ -90,8 +93,7 @@ export const api = {
   checkDuplicates: (account: string, transactions: Pick<ParsedTransaction, 'date' | 'description' | 'amountCents'>[]) =>
     request<DuplicateMatch[]>('/transactions/check-duplicates', { method: 'POST', body: { account, transactions } }),
   getDuplicates: () => request<DuplicatePair[]>('/duplicates'),
-  ignoreDuplicate: (ids: [string, string]) =>
-    request<null>('/duplicates/ignore', { method: 'POST', body: { ids } }),
+  ignoreDuplicate: (ids: [string, string]) => request<null>('/duplicates/ignore', { method: 'POST', body: { ids } }),
   getProjections: () => request<Projection[]>('/projections'),
   createProjection: (body: ProjectionInput) => request<Projection>('/projections', { method: 'POST', body }),
   updateProjection: (id: string, body: ProjectionInput) =>

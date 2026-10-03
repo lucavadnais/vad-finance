@@ -12,7 +12,10 @@ export interface Account {
   currency: string;
   initialBalanceCents: number;
   balanceCents: number;
+  transactionCount: number;
 }
+
+export type AccountInput = Pick<Account, 'name' | 'type' | 'initialBalanceCents'>;
 
 export interface CategoryGroup {
   _id: string;

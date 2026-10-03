@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { Month } from '@/lib/projections';
 import { computed, defineAsyncComponent, ref } from 'vue';
+import { Pencil } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { currentMonth } from '@/lib/projections';
+import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
-import AccountLogoButton from '@/components/AccountLogoButton.vue';
+import AccountLogo from '@/components/AccountLogo.vue';
 import CsvImport from '@/components/CsvImport.vue';
 import DuplicateReview from '@/components/DuplicateReview.vue';
 import ProjectionMonth from '@/components/ProjectionMonth.vue';
@@ -52,10 +54,15 @@ const projectionMonth = ref<Month>(currentMonth());
           <p v-if="accounts.length === 0" class="text-sm text-muted-foreground">Aucun compte pour l'instant.</p>
           <ul v-else class="flex flex-col gap-2">
             <li v-for="a in accounts" :key="a._id" class="flex items-center gap-2 text-sm">
-              <AccountLogoButton :account="a" @changed="refresh" @error="setError" />
+              <AccountLogo :account="a" />
               <span class="font-medium">{{ a.name }}</span>
               <span class="text-muted-foreground">({{ ACCOUNT_TYPES[a.type] ?? a.type }})</span>
               <span class="ml-auto tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
+              <AccountForm :account="a" :accounts="accounts" @changed="refresh" @error="setError">
+                <Button size="icon-sm" variant="ghost" :aria-label="`Modifier ${a.name}`" :title="`Modifier ${a.name}`">
+                  <Pencil />
+                </Button>
+              </AccountForm>
             </li>
           </ul>
         </CardContent>
@@ -98,12 +105,7 @@ const projectionMonth = ref<Month>(currentMonth());
         @error="setError"
       />
 
-      <DuplicateReview
-        v-if="duplicatePairs.length > 0"
-        :pairs="duplicatePairs"
-        @changed="refresh"
-        @error="setError"
-      />
+      <DuplicateReview v-if="duplicatePairs.length > 0" :pairs="duplicatePairs" @changed="refresh" @error="setError" />
 
       <TransactionsTable
         :accounts="accounts"

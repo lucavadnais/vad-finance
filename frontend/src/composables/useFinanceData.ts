@@ -5,6 +5,7 @@ import type {
   CategoryGroup,
   DuplicatePair,
   Projection,
+  Settings,
   Transaction,
   TransferCandidate,
 } from '@/types';
@@ -22,13 +23,14 @@ const dataVersion = ref(0);
 const projections = ref<Projection[]>([]);
 const transferCandidates = ref<TransferCandidate[]>([]);
 const duplicatePairs = ref<DuplicatePair[]>([]);
+const settings = ref<Settings>({ budgetBufferCents: 0 });
 const error = ref('');
 // Displayed color of each category, by id (group shade or own color)
 const categoryColors = computed(() => colorsOf(categories.value, categoryGroups.value));
 
 async function refresh() {
   try {
-    const [a, c, g, t, tc, d, p] = await Promise.all([
+    const [a, c, g, t, tc, d, p, s] = await Promise.all([
       api.getAccounts(),
       api.getCategories(),
       api.getCategoryGroups(),
@@ -36,6 +38,7 @@ async function refresh() {
       api.getTransferCandidates(),
       api.getDuplicates(),
       api.getProjections(),
+      api.getSettings(),
     ]);
     accounts.value = a;
     categories.value = c;
@@ -45,6 +48,7 @@ async function refresh() {
     transferCandidates.value = tc;
     duplicatePairs.value = d;
     projections.value = p;
+    settings.value = s;
     error.value = '';
   } catch (err) {
     error.value = (err as Error).message;
@@ -66,6 +70,7 @@ export function useFinanceData() {
     transferCandidates,
     duplicatePairs,
     projections,
+    settings,
     error,
     refresh,
     setError,

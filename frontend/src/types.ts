@@ -160,3 +160,9 @@ export interface ImportSummary {
   // Imported transfers linked to their other side, already in the app
   linked: number;
 }
+
+// App settings (GET/PUT /settings)
+export interface Settings {
+  // Kept aside each month for unplanned spending, see BudgetSummary
+  budgetBufferCents: number;
+}

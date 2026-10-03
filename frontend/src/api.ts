@@ -10,6 +10,7 @@ import type {
   ParsedCsv,
   ParsedTransaction,
   Projection,
+  Settings,
   ProjectionInput,
   Transaction,
   TransactionInput,
@@ -111,6 +112,8 @@ export const api = {
   updateProjection: (id: string, body: ProjectionInput) =>
     request<Projection>(`/projections/${id}`, { method: 'PUT', body }),
   deleteProjection: (id: string) => request<null>(`/projections/${id}`, { method: 'DELETE' }),
+  getSettings: () => request<Settings>('/settings'),
+  updateSettings: (body: Partial<Settings>) => request<Settings>('/settings', { method: 'PUT', body }),
   importTransactions: (body: { account: string; transactions: ParsedTransaction[]; allowDuplicates?: boolean }) =>
     request<ImportSummary>('/transactions/import', { method: 'POST', body }),
 };

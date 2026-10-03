@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// "Paramètres": a large dialog with a side menu, one section per subject. Only
-// "Catégories et groupes" for now; user profile and security will join it.
+// "Paramètres": a large dialog with a side menu, one section per subject
+// (categories and groups, budget); user profile and security will join it.
 import type { Component } from 'vue';
 import type { SettingsSection } from '@/composables/useSettings';
 import { ref, watch } from 'vue';
-import { Tags } from '@lucide/vue';
+import { PiggyBank, Tags } from '@lucide/vue';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useSettings } from '@/composables/useSettings';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import BudgetSettings from './BudgetSettings.vue';
 import CategoryManager from './CategoryManager.vue';
 
 const { open, section } = useSettings();
@@ -16,6 +17,7 @@ const { categories, categoryGroups, refresh } = useFinanceData();
 
 const SECTIONS: { key: SettingsSection; label: string; icon: Component }[] = [
   { key: 'categories', label: 'Catégories et groupes', icon: Tags },
+  { key: 'budget', label: 'Budget', icon: PiggyBank },
 ];
 
 // Errors show inside the dialog: the page's banner is hidden behind it
@@ -63,6 +65,7 @@ watch([open, section], () => (error.value = ''));
           @changed="refresh"
           @error="error = $event"
         />
+        <BudgetSettings v-else-if="section === 'budget'" @error="error = $event" />
       </div>
     </DialogContent>
   </Dialog>

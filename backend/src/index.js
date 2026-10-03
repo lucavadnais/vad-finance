@@ -8,6 +8,7 @@ import transactionsRouter from './routes/transactions.js';
 import transfersRouter from './routes/transfers.js';
 import duplicatesRouter from './routes/duplicates.js';
 import projectionsRouter from './routes/projections.js';
+import settingsRouter from './routes/settings.js';
 import { migrateProjections } from './models/Projection.js';
 import { migrateColors } from './lib/colors.js';
 
@@ -23,6 +24,7 @@ app.use('/api/transactions', transactionsRouter);
 app.use('/api/transfers', transfersRouter);
 app.use('/api/duplicates', duplicatesRouter);
 app.use('/api/projections', projectionsRouter);
+app.use('/api/settings', settingsRouter);
 
 // Express 5 forwards rejected promises from async handlers here.
 // It spots error handlers by their 4 parameters, so `next` must stay

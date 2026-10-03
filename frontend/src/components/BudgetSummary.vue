@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { useFinanceData } from '@/composables/useFinanceData';
+import { useSettings } from '@/composables/useSettings';
 import CategoryDot from './CategoryDot.vue';
 
 const props = defineProps<{
@@ -27,7 +28,8 @@ const props = defineProps<{
 const emit = defineEmits<{ edit: [projection: Projection] }>();
 
 // Rows of a category are keyed by its id (see lib/budget.ts)
-const { categoryColors } = useFinanceData();
+const { categoryColors, settings } = useFinanceData();
+const { openSettings } = useSettings();
 
 // Section summary, added up category by category (a net total would let an
 // overrun in one category hide behind a bill not charged yet in another):
@@ -62,6 +64,12 @@ const sections = computed(() =>
       const unplanned = s.rows.filter((r) => !r.uncategorized && r.plannedCents === 0);
       const uncategorized = s.rows.filter((r) => r.uncategorized);
       const unplannedCents = sum(unplanned).actualCents;
+      const summary = summarize(compared, unplannedCents);
+      // Spending: the monthly buffer is planned too, and absorbs what goes over
+      // the forecasts (or has none) before it counts as an overrun
+      const bufferCents = s.kind === 'expense' ? settings.value.budgetBufferCents : 0;
+      const bufferUsedCents = Math.min(summary.extraCents, bufferCents);
+      const total = sum(s.rows);
       return {
         ...s,
         compared,
@@ -69,14 +77,15 @@ const sections = computed(() =>
         uncategorized,
         unplannedCents,
         // Every forecast counts in the planned total, like in the net
-        total: sum(s.rows),
-        summary: summarize(compared, unplannedCents),
+        total: { ...total, plannedCents: total.plannedCents + bufferCents },
+        summary: { ...summary, bufferCents, bufferUsedCents, overrunCents: summary.extraCents - bufferUsedCents },
       };
     }),
 );
 // Net over the whole month: what already came in and went out, plus the
-// forecasts not reached yet (to receive, minus to spend). A finished month
-// keeps its actual net: what did not happen will not anymore.
+// forecasts not reached yet (to receive, minus to spend, minus what is left of
+// the buffer). A finished month keeps its actual net: what did not happen will
+// not anymore. The planned net counts the buffer as spending.
 const isPast = computed(() => {
   const now = currentMonth();
   return Date.UTC(props.month.year, props.month.month) < Date.UTC(now.year, now.month);
@@ -84,13 +93,13 @@ const isPast = computed(() => {
 const net = computed(() => {
   const actualCents = sum(data.value.income).actualCents - sum(data.value.expense).actualCents;
   const left = (kind: 'income' | 'expense') => sections.value.find((s) => s.kind === kind)?.summary.leftCents ?? 0;
+  const buffer = settings.value.budgetBufferCents;
+  const bufferLeft = buffer - (expenses.value?.summary.bufferUsedCents ?? 0);
   return {
-    actualCents,
-    estimatedCents: isPast.value ? actualCents : actualCents + left('income') - left('expense'),
-    plannedCents: totals(occurrences(props.projections, props.month)).netCents,
+    estimatedCents: isPast.value ? actualCents : actualCents + left('income') - left('expense') - bufferLeft,
+    plannedCents: totals(occurrences(props.projections, props.month)).netCents - buffer,
   };
 });
-const netGap = computed(() => net.value.estimatedCents - net.value.plannedCents);
 const netClass = (cents: number) => (cents < 0 ? 'text-destructive' : cents > 0 ? 'text-emerald-600' : '');
 
 const unplannedOpen = ref<Record<string, boolean>>({});
@@ -104,7 +113,13 @@ const detail = computed(() => sections.value.find((s) => s.kind === expanded.val
 // Bars only turn red on a spending overrun: an income bar shows money received,
 // its lateness is said in red text instead
 type Section = (typeof sections.value)[number];
-const isSectionBad = (s: Section) => s.kind === 'expense' && s.summary.extraCents > 0;
+const isSectionBad = (s: Section) => s.kind === 'expense' && s.summary.overrunCents > 0;
+// The buffer covers every overrun of the month: they are shown, not in red
+const expenses = computed(() => sections.value.find((s) => s.kind === 'expense'));
+const covered = computed(() => {
+  const s = expenses.value?.summary;
+  return !!s && s.bufferCents > 0 && s.extraCents > 0 && s.overrunCents === 0;
+});
 
 type Amounts = Pick<BudgetRow, 'kind' | 'plannedCents' | 'dueCents' | 'actualCents'>;
 
@@ -126,6 +141,8 @@ type Tone = 'bad' | 'good' | 'muted' | 'done';
 function status(r: BudgetRow): { rank: number; tone: Tone; label: string } {
   const g = gap(r);
   const amount = formatCents(Math.abs(g));
+  if (g > 0 && r.kind === 'expense' && covered.value)
+    return { rank: 2, tone: 'muted', label: `+${amount} · couvert par la marge` };
   if (g > 0)
     return r.kind === 'expense'
       ? { rank: 0, tone: 'bad', label: `Dépassé de ${amount}` }
@@ -171,34 +188,32 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
     <div class="grid gap-4 @xl:grid-cols-3">
       <div class="flex flex-col gap-2 rounded-lg border p-4">
         <h3 class="text-sm text-muted-foreground">{{ isPast ? 'Net' : 'Net estimé du mois' }}</h3>
-        <span class="text-2xl font-semibold tabular-nums" :class="netClass(net.estimatedCents)">
-          {{ formatCents(net.estimatedCents) }}
-        </span>
-        <!-- The gap with the forecasts' net, rather than repeating it when equal -->
-        <span
-          class="text-sm"
-          :class="netGap === 0 ? 'text-muted-foreground' : netGap > 0 ? 'text-emerald-600' : 'text-destructive'"
-          :title="`Net prévu : ${formatCents(net.plannedCents)}`"
-        >
-          <template v-if="netGap === 0">Conforme aux prévisions</template>
-          <template v-else>
-            <span class="tabular-nums">{{ formatCents(Math.abs(netGap)) }}</span>
-            de {{ netGap > 0 ? 'plus' : 'moins' }} que prévu
-          </template>
-        </span>
-        <span v-if="!isPast" class="text-sm text-muted-foreground">
-          Réel à ce jour <span class="tabular-nums">{{ formatCents(net.actualCents) }}</span>
-        </span>
+        <!-- The estimate in big, the forecast below. No gap: it is the income
+             tile's "En plus" minus the spending tile's "Dépassements" -->
+        <div class="flex flex-col gap-1">
+          <span class="text-4xl font-semibold tabular-nums" :class="netClass(net.estimatedCents)">
+            {{ formatCents(net.estimatedCents) }}
+          </span>
+          <span class="text-base text-muted-foreground tabular-nums"
+            >sur {{ formatCents(net.plannedCents) }} prévus</span
+          >
+        </div>
       </div>
-      <button
+      <!-- The whole tile opens the detail through a button stretched over it;
+           a link can still sit above it (a link cannot go inside a button) -->
+      <div
         v-for="s in sections"
         :key="s.kind"
-        type="button"
-        :aria-expanded="expanded === s.kind"
-        class="group flex flex-col gap-2 rounded-lg border p-4 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+        class="group relative flex flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
         :class="expanded === s.kind && 'border-primary bg-muted/50'"
-        @click="toggle(s.kind)"
       >
+        <button
+          type="button"
+          class="absolute inset-0 rounded-lg outline-none"
+          :aria-expanded="expanded === s.kind"
+          :aria-label="`${expanded === s.kind ? 'Masquer' : 'Voir'} le détail des ${s.title.toLowerCase()}`"
+          @click="toggle(s.kind)"
+        />
         <span class="flex items-center justify-between text-sm text-muted-foreground">
           {{ s.title }}
           <span class="flex items-center gap-0.5 text-xs group-hover:text-foreground">
@@ -225,9 +240,12 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
           <span v-if="s.kind === 'income' && s.summary.lateCents > 0" class="text-destructive">
             En retard <span class="tabular-nums">{{ formatCents(s.summary.lateCents) }}</span>
           </span>
-          <span v-if="s.summary.extraCents > 0" :class="s.kind === 'expense' ? 'text-destructive' : 'text-emerald-600'">
+          <span
+            v-if="s.summary.overrunCents > 0"
+            :class="s.kind === 'expense' ? 'text-destructive' : 'text-emerald-600'"
+          >
             {{ s.kind === 'expense' ? 'Dépassements' : 'En plus' }}
-            <span class="tabular-nums">{{ formatCents(s.summary.extraCents) }}</span>
+            <span class="tabular-nums">{{ formatCents(s.summary.overrunCents) }}</span>
           </span>
           <span
             v-if="s.summary.leftCents === 0 && s.summary.extraCents === 0 && s.total.plannedCents > 0"
@@ -236,7 +254,36 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
             Comme prévu
           </span>
         </span>
-      </button>
+        <!-- Monthly buffer for unplanned spending, in a strip stuck to the bottom;
+             over it (or without one), a link to plan (more of) a buffer -->
+        <div
+          v-if="s.summary.bufferCents > 0 || (s.kind === 'expense' && s.summary.overrunCents > 0)"
+          class="-mx-4 mt-auto -mb-4 flex flex-col gap-1.5 rounded-b-lg border-t bg-muted/60 px-4 py-2 text-xs"
+        >
+          <template v-if="s.summary.bufferCents > 0">
+            <span class="flex items-center justify-between gap-2 whitespace-nowrap text-muted-foreground">
+              Marge imprévus
+              <span class="tabular-nums">
+                <span class="text-foreground">{{ formatCents(s.summary.bufferUsedCents) }}</span>
+                / {{ formatCents(s.summary.bufferCents) }}
+              </span>
+            </span>
+            <Progress
+              :model-value="(s.summary.bufferUsedCents / s.summary.bufferCents) * 100"
+              class="h-1"
+              :class="s.summary.overrunCents > 0 && '*:data-[slot=progress-indicator]:bg-destructive'"
+            />
+          </template>
+          <button
+            v-if="s.kind === 'expense' && s.summary.overrunCents > 0"
+            type="button"
+            class="relative z-10 self-start text-left text-primary underline underline-offset-4 hover:no-underline"
+            @click="openSettings('budget')"
+          >
+            {{ s.summary.bufferCents > 0 ? 'Augmenter la marge' : 'Prévoir une marge' }} pour les dépassements
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Detail of the opened tile, one line per category -->
@@ -275,7 +322,7 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
           <Progress
             :model-value="progress(r)"
             class="col-span-2 @2xl:col-span-1 @2xl:col-start-2 @2xl:row-start-1"
-            :class="r.kind === 'expense' && isBad(r) && '*:data-[slot=progress-indicator]:bg-destructive'"
+            :class="r.kind === 'expense' && isBad(r) && !covered && '*:data-[slot=progress-indicator]:bg-destructive'"
           />
           <div class="col-span-2 @2xl:col-span-1 @2xl:col-start-4 @2xl:row-start-1 @2xl:justify-self-end">
             <Badge :variant="st.tone === 'done' ? 'secondary' : 'outline'" :class="TONES[st.tone]">
@@ -310,6 +357,9 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
           <Button variant="ghost" size="sm" class="-mx-2 w-[calc(100%+1rem)] justify-start">
             <ChevronRight class="transition-transform" :class="unplannedOpen[detail.kind] && 'rotate-90'" />
             Non prévu ({{ detail.unplanned.length }})
+            <span v-if="detail.kind === 'expense' && covered" class="font-normal text-muted-foreground">
+              · couvert par la marge
+            </span>
             <span class="ml-auto tabular-nums">{{ formatCents(detail.unplannedCents) }}</span>
           </Button>
         </CollapsibleTrigger>

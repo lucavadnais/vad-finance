@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Wraps a trigger (default slot) with a shadcn AlertDialog asking to confirm
+// Wraps a trigger (default slot) with a shadcn AlertDialog asking to confirm.
+// Without a trigger, open it through v-model:open (e.g. from a menu item).
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,12 +17,13 @@ import { buttonVariants } from '@/components/ui/button';
 withDefaults(defineProps<{ title: string; description?: string; confirmLabel?: string }>(), {
   confirmLabel: 'Supprimer',
 });
+const open = defineModel<boolean>('open', { default: false });
 const emit = defineEmits<{ confirm: [] }>();
 </script>
 
 <template>
-  <AlertDialog>
-    <AlertDialogTrigger as-child>
+  <AlertDialog v-model:open="open">
+    <AlertDialogTrigger v-if="$slots.default" as-child>
       <slot />
     </AlertDialogTrigger>
     <AlertDialogContent>

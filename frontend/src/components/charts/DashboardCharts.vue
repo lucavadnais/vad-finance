@@ -15,6 +15,7 @@ import {
   isExpense,
   periodStart,
 } from '@/lib/chartData';
+import { Card, CardAction, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -85,23 +86,22 @@ const formatDayTick = (row: Row) =>
 const TICKS: Partial<Record<Granularity, (row: Row) => string>> = { day: formatDayTick, week: formatWeekTick };
 
 const perAccount = computed(() => accountSeries(props.accounts));
-const balance = computed(() =>
-  balanceOverTime(props.transactions, props.accounts, perAccount.value, from.value),
-);
+const balance = computed(() => balanceOverTime(props.transactions, props.accounts, perAccount.value, from.value));
 </script>
 
 <template>
-  <section class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-center gap-3">
-      <h2 class="mr-auto text-xl font-semibold">Analyse</h2>
-      <div v-if="groups.length > 0" class="flex items-center gap-2">
-        <Switch id="group-categories" v-model="grouped" />
-        <Label for="group-categories" class="font-normal">Regrouper par groupe</Label>
-      </div>
-      <span class="text-sm text-muted-foreground">Période</span>
-      <OptionSelect v-model="period" :options="PERIODS" class="w-44" />
-    </div>
-
+  <Card>
+    <CardHeader>
+      <CardTitle class="text-xl">Analyse</CardTitle>
+      <CardAction class="flex flex-wrap items-center justify-end gap-3">
+        <div v-if="groups.length > 0" class="flex items-center gap-2">
+          <Switch id="group-categories" v-model="grouped" />
+          <Label for="group-categories" class="font-normal">Regrouper par groupe</Label>
+        </div>
+        <span class="text-sm text-muted-foreground">Période</span>
+        <OptionSelect v-model="period" :options="PERIODS" class="w-44" />
+      </CardAction>
+    </CardHeader>
     <ExpensesChart
       title="Dépenses"
       :description="DESCRIPTIONS[granularity]"
@@ -124,5 +124,5 @@ const balance = computed(() =>
       </template>
     </ExpensesChart>
     <BalanceChart :rows="balance" :account-series="perAccount" />
-  </section>
+  </Card>
 </template>

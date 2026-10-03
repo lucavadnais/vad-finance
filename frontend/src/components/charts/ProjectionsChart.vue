@@ -73,9 +73,14 @@ const yDomain = computed<[number, number]>(() => [
 ]);
 const y = SERIES.map((s) => (d: Row) => Number(d[s.key] ?? 0));
 const color = (_: Row, i: number) => SERIES[i]?.color;
+// The year only on the first month and on January, so the labels stay short
+// enough for one line
 const tickLabel = (i: number) => {
-  const m = months[Math.round(i)];
-  return m ? monthLabel(m, 'short') : '';
+  const index = Math.round(i);
+  const m = months[index];
+  if (!m) return '';
+  if (index === 0 || m.month === 0) return monthLabel(m, 'short');
+  return new Date(Date.UTC(m.year, m.month, 1)).toLocaleDateString('fr-CA', { timeZone: 'UTC', month: 'short' });
 };
 // The month shown below stays highlighted, the others fade
 // A new function on each change: Unovis only redraws when its props change
@@ -112,7 +117,7 @@ const events = {
     </div>
     <TabsContent value="chart">
       <div class="flex flex-col gap-4">
-        <ChartContainer :config="config" class="aspect-auto h-64">
+        <ChartContainer :config="config" class="aspect-auto h-auto [&_[data-vis-xy-container]]:h-64">
           <VisXYContainer :data="rows" :y-domain="yDomain" :margin="{ left: 8, right: 8 }">
             <VisGroupedBar
               :x="(_: Row, i: number) => i"
@@ -147,7 +152,12 @@ const events = {
             </Button>
           </div>
           <div class="flex min-h-0 flex-1 flex-col px-1">
-            <ProjectionTable :rows="monthRows" :categories="categories" date-label="Jours" empty="Rien de prévu ce mois-là" />
+            <ProjectionTable
+              :rows="monthRows"
+              :categories="categories"
+              date-label="Jours"
+              empty="Rien de prévu ce mois-là"
+            />
           </div>
         </section>
       </div>

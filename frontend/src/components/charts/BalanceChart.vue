@@ -7,7 +7,7 @@ import { CurveType } from '@unovis/ts';
 import { VisArea, VisAxis, VisCrosshair, VisLine, VisTooltip, VisXYContainer } from '@unovis/vue';
 import { formatCentsCompact } from '@/api';
 import { TOTAL_SERIES } from '@/lib/chartData';
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SeriesTable from './SeriesTable.vue';
@@ -28,20 +28,20 @@ const color = computed(() => series.value.map((s) => s.color));
 
 const formatDay = (t: number) =>
   new Date(t).toLocaleDateString('fr-CA', { timeZone: 'UTC', day: 'numeric', month: 'short' });
-const formatRowDate = (row: Row) =>
-  new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC' });
+const formatRowDate = (row: Row) => new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC' });
 
 const template = tooltipTemplate(() => config.value, { dateLabel: true, showTotal: false });
 </script>
 
 <template>
-  <Card>
+  <!-- Rendered inside the analysis card (DashboardCharts) -->
+  <section>
     <Tabs default-value="chart" class="gap-6">
       <CardHeader>
         <CardTitle>Fluctuation du solde</CardTitle>
         <CardDescription>
-          {{ mode === 'total' ? 'Solde total de tous les comptes' : 'Solde de chaque compte' }}, après chaque
-          journée de transactions.
+          {{ mode === 'total' ? 'Solde total de tous les comptes' : 'Solde de chaque compte' }}, après chaque journée de
+          transactions.
         </CardDescription>
         <CardAction class="flex flex-wrap justify-end gap-2">
           <Tabs v-model="mode">
@@ -62,7 +62,7 @@ const template = tooltipTemplate(() => config.value, { dateLabel: true, showTota
         </p>
         <template v-else>
           <TabsContent value="chart">
-            <ChartContainer :config="config" cursor class="aspect-auto h-72">
+            <ChartContainer :config="config" cursor class="aspect-auto h-auto [&_[data-vis-xy-container]]:h-72">
               <VisXYContainer :data="rows" :margin="{ left: 8, right: 8 }">
                 <VisArea
                   v-if="mode === 'total'"
@@ -72,20 +72,8 @@ const template = tooltipTemplate(() => config.value, { dateLabel: true, showTota
                   :opacity="0.1"
                   :curve-type="CurveType.StepAfter"
                 />
-                <VisLine
-                  :x="x"
-                  :y="y"
-                  :color="color"
-                  :line-width="2"
-                  :curve-type="CurveType.StepAfter"
-                />
-                <VisAxis
-                  type="x"
-                  :tick-format="formatDay"
-                  :num-ticks="6"
-                  :grid-line="false"
-                  :tick-line="false"
-                />
+                <VisLine :x="x" :y="y" :color="color" :line-width="2" :curve-type="CurveType.StepAfter" />
+                <VisAxis type="x" :tick-format="formatDay" :num-ticks="6" :grid-line="false" :tick-line="false" />
                 <VisAxis
                   type="y"
                   :tick-format="(v: number) => formatCentsCompact(v)"
@@ -111,5 +99,5 @@ const template = tooltipTemplate(() => config.value, { dateLabel: true, showTota
         </template>
       </CardContent>
     </Tabs>
-  </Card>
+  </section>
 </template>

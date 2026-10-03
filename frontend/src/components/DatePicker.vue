@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 
 const model = defineModel<string>();
-const props = defineProps<{ class?: HTMLAttributes['class'] }>();
+const props = defineProps<{ id?: string; class?: HTMLAttributes['class'] }>();
 
 const open = ref(false);
 
@@ -39,6 +39,7 @@ const label = computed(() =>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
       <Button
+        :id="id"
         variant="outline"
         :class="cn('w-40 justify-start font-normal', !model && 'text-muted-foreground', props.class)"
       >

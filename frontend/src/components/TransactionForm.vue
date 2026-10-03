@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Account, Category, DuplicateMatch } from '@/types';
 import { computed, ref } from 'vue';
-import { ArrowRight } from '@lucide/vue';
+import { Plus } from '@lucide/vue';
 import { api, formatCents, formatDate, signedCents, toCents } from '@/api';
 import {
   AlertDialog,
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CategorySelect from './CategorySelect.vue';
 import DatePicker from './DatePicker.vue';
@@ -21,7 +22,6 @@ import AccountSelect from './AccountSelect.vue';
 
 const props = defineProps<{ accounts: Account[]; categories: Category[] }>();
 const emit = defineEmits<{ created: []; error: [message: string] }>();
-
 
 // 'transaction' = one account; 'transfer' = money moved between two own accounts
 const mode = ref<'transaction' | 'transfer'>('transaction');
@@ -53,8 +53,7 @@ const pending = ref<Pending | null>(null);
 const accountName = (id: string) => props.accounts.find((a) => a._id === id)?.name ?? '';
 
 async function submit() {
-  const amountCents =
-    mode.value === 'transfer' ? toCents(amount.value) : signedCents(amount.value, categoryKind.value);
+  const amountCents = mode.value === 'transfer' ? toCents(amount.value) : signedCents(amount.value, categoryKind.value);
   if (Number.isNaN(amountCents)) {
     emit('error', 'Montant invalide');
     return;
@@ -110,41 +109,78 @@ async function finish(save: () => Promise<unknown>) {
 </script>
 
 <template>
-  <form class="flex flex-col gap-3" @submit.prevent="submit">
+  <!-- Fills the card: two columns once it is wide enough, one on narrow cards -->
+  <form class="@container flex flex-col gap-4" @submit.prevent="submit">
     <Tabs v-model="mode">
-      <TabsList>
+      <TabsList class="w-full">
         <TabsTrigger value="transaction">Transaction</TabsTrigger>
         <TabsTrigger value="transfer" :disabled="accounts.length < 2">Transfert entre comptes</TabsTrigger>
       </TabsList>
     </Tabs>
 
-    <div v-if="mode === 'transaction'" class="flex flex-wrap gap-2">
-      <AccountSelect v-model="account" :accounts="accounts" class="w-52" />
-      <DatePicker v-model="date" />
-      <Input v-model="description" placeholder="Description" class="w-56" />
-      <CategorySelect v-model="category" :categories="categories" class="w-44" />
-      <Input v-model="amount" :placeholder="amountPlaceholder" required class="w-52" />
-      <Button type="submit">Ajouter</Button>
+    <div class="grid gap-4 @sm:grid-cols-2">
+      <template v-if="mode === 'transaction'">
+        <div class="flex flex-col gap-2">
+          <Label for="manual-account">Compte</Label>
+          <AccountSelect id="manual-account" v-model="account" :accounts="accounts" class="w-full" />
+        </div>
+      </template>
+      <template v-else>
+        <div class="flex flex-col gap-2">
+          <Label for="manual-from">De</Label>
+          <AccountSelect id="manual-from" v-model="account" :accounts="accounts" placeholder="De" class="w-full" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <Label for="manual-to">Vers</Label>
+          <AccountSelect
+            id="manual-to"
+            v-model="toAccount"
+            :accounts="accounts.filter((a) => a._id !== account)"
+            placeholder="Vers"
+            class="w-full"
+          />
+        </div>
+      </template>
+
+      <div class="flex flex-col gap-2">
+        <Label for="manual-date">Date</Label>
+        <DatePicker id="manual-date" v-model="date" class="w-full" />
+      </div>
+      <div v-if="mode === 'transfer'" class="flex flex-col gap-2">
+        <Label for="manual-amount">Montant</Label>
+        <Input id="manual-amount" v-model="amount" inputmode="decimal" placeholder="0,00" required />
+      </div>
+
+      <div class="flex flex-col gap-2 @sm:col-span-2">
+        <Label for="manual-description">Description</Label>
+        <Input
+          id="manual-description"
+          v-model="description"
+          :placeholder="mode === 'transfer' ? 'ex. paiement Visa' : 'ex. Épicerie IGA'"
+        />
+      </div>
+
+      <template v-if="mode === 'transaction'">
+        <div class="flex flex-col gap-2">
+          <Label for="manual-category">Catégorie</Label>
+          <CategorySelect id="manual-category" v-model="category" :categories="categories" class="w-full" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <Label for="manual-amount">Montant</Label>
+          <Input id="manual-amount" v-model="amount" inputmode="decimal" :placeholder="amountPlaceholder" required />
+        </div>
+      </template>
     </div>
 
-    <div v-else class="flex flex-wrap items-center gap-2">
-      <AccountSelect v-model="account" :accounts="accounts" placeholder="De" class="w-52" />
-      <ArrowRight class="size-4 text-muted-foreground" />
-      <AccountSelect
-        v-model="toAccount"
-        :accounts="accounts.filter((a) => a._id !== account)"
-        placeholder="Vers"
-        class="w-52"
-      />
-      <DatePicker v-model="date" />
-      <Input v-model="description" placeholder="Description (ex. paiement Visa)" class="w-56" />
-      <Input v-model="amount" placeholder="Montant" required class="w-32" />
-      <Button type="submit">Ajouter le transfert</Button>
-      <p class="w-full text-sm text-muted-foreground">
-        Crée les deux côtés : le montant sort du premier compte et arrive dans le second. Ce n'est
-        compté ni comme une dépense ni comme un revenu.
-      </p>
-    </div>
+    <p v-if="mode === 'transfer'" class="text-sm text-muted-foreground">
+      Crée les deux côtés : le montant sort du premier compte et arrive dans le second. Ce n'est compté ni comme une
+      dépense ni comme un revenu.
+    </p>
+
+    <Button type="submit" class="self-end">
+      <Plus />
+      {{ mode === 'transfer' ? 'Ajouter le transfert' : 'Ajouter la transaction' }}
+    </Button>
 
     <AlertDialog :open="!!pending" @update:open="(open) => !open && (pending = null)">
       <AlertDialogContent>

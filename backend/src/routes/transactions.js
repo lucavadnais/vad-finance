@@ -136,7 +136,7 @@ router.get('/', async (req, res) => {
   const query = () =>
     Transaction.find(filter)
       .sort({ date: -1, _id: -1 })
-      .populate('account', 'name')
+      .populate('account', 'name logoUpdatedAt')
       .populate('category', 'name kind')
       .populate('transferAccount', 'name');
 

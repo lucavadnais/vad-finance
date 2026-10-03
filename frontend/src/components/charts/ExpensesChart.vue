@@ -7,7 +7,7 @@ import { computed, ref } from 'vue';
 import { StackedBar } from '@unovis/ts';
 import { VisAxis, VisStackedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
 import { formatCentsCompact } from '@/api';
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ExpensesDonut from './ExpensesDonut.vue';
@@ -72,7 +72,8 @@ const barEvents = {
 </script>
 
 <template>
-  <Card>
+  <!-- Rendered inside the analysis card (DashboardCharts) -->
+  <section>
     <Tabs v-model="view" class="gap-6">
       <CardHeader>
         <div>
@@ -96,7 +97,7 @@ const barEvents = {
         </p>
         <template v-else>
           <TabsContent value="chart">
-            <ChartContainer :config="config" class="aspect-auto h-74 mt-2">
+            <ChartContainer :config="config" class="mt-2 aspect-auto h-auto [&_[data-vis-xy-container]]:h-74">
               <VisXYContainer :data="rows" :x-domain="xDomain" :margin="{ left: 8, right: 8 }">
                 <VisStackedBar
                   :x="(_: Row, i: number) => i"
@@ -144,5 +145,5 @@ const barEvents = {
         />
       </CardContent>
     </Tabs>
-  </Card>
+  </section>
 </template>

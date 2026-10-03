@@ -1,96 +1,27 @@
 <script setup lang="ts">
-import type { Account, Category, Transaction } from '@/types';
+// One transaction, compact: account image, date over description, category,
+// amount. "Modifier" in the actions menu asks the table to open the edit popup.
+import type { Transaction } from '@/types';
 import { computed, ref } from 'vue';
-import { ArrowLeft, ArrowRight, Check, Link2, Pencil, Trash2, Undo2, Unlink } from '@lucide/vue';
-import { api, formatCents, formatDate, signedCents, toDateInput } from '@/api';
+import { ArrowLeft, ArrowRight, Ellipsis, Link2, Pencil, Trash2 } from '@lucide/vue';
+import { api, formatCents, formatDate } from '@/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
-import CategorySelect, { TRANSFER } from './CategorySelect.vue';
+import AccountLogo from './AccountLogo.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
-import DatePicker from './DatePicker.vue';
-import AccountSelect from './AccountSelect.vue';
 
-const props = defineProps<{
-  transaction: Transaction;
-  accounts: Account[];
-  categories: Category[];
-}>();
-const emit = defineEmits<{ changed: []; error: [message: string] }>();
+const props = defineProps<{ transaction: Transaction }>();
+const emit = defineEmits<{ edit: []; changed: []; error: [message: string] }>();
 
-
-const editing = ref(false);
-const saving = ref(false);
-const form = ref({
-  account: '',
-  category: null as string | null,
-  transferAccount: undefined as string | undefined,
-  date: '',
-  description: '',
-  amount: '',
-});
-
+const confirmOpen = ref(false);
 const linked = computed(() => !!props.transaction.transferPeer);
-// "Transfert" in the category select turns the transaction into a transfer
-const isTransfer = computed(() => form.value.category === TRANSFER);
-// Undefined for transfers and uncategorized: the typed sign is kept
-const categoryKind = computed(() => props.categories.find((c) => c._id === form.value.category)?.kind);
-const otherAccounts = computed(() => props.accounts.filter((a) => a._id !== form.value.account));
-
-function startEdit() {
-  const t = props.transaction;
-  form.value = {
-    account: t.account?._id ?? '',
-    category: t.transferAccount ? TRANSFER : (t.category?._id ?? null),
-    transferAccount: t.transferAccount?._id,
-    date: toDateInput(t.date),
-    description: t.description,
-    // The category gives the sign, so only the magnitude is edited
-    amount: ((t.category && !t.transferAccount ? Math.abs(t.amountCents) : t.amountCents) / 100).toFixed(2),
-  };
-  editing.value = true;
-}
-
-async function save() {
-  const amountCents = signedCents(form.value.amount, categoryKind.value);
-  if (Number.isNaN(amountCents)) {
-    emit('error', 'Montant invalide');
-    return;
-  }
-  if (isTransfer.value && !form.value.transferAccount) {
-    emit('error', "Choisis l'autre compte du transfert");
-    return;
-  }
-  saving.value = true;
-  try {
-    await api.updateTransaction(props.transaction._id, {
-      account: form.value.account,
-      // A transfer has no category
-      category: isTransfer.value ? null : form.value.category,
-      transferAccount: isTransfer.value ? (form.value.transferAccount ?? null) : null,
-      date: form.value.date,
-      description: form.value.description,
-      amountCents,
-    });
-    editing.value = false;
-    emit('changed');
-  } catch (err) {
-    emit('error', (err as Error).message);
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function unlink() {
-  try {
-    await api.unlinkTransfer(props.transaction._id);
-    editing.value = false;
-    emit('changed');
-  } catch (err) {
-    emit('error', (err as Error).message);
-  }
-}
 
 async function remove() {
   try {
@@ -103,85 +34,31 @@ async function remove() {
 </script>
 
 <template>
-  <TableRow v-if="editing">
-    <TableCell><DatePicker v-model="form.date" class="w-36" /></TableCell>
-    <TableCell><AccountSelect v-model="form.account" :accounts="accounts" class="w-40" /></TableCell>
-    <TableCell>
-      <Input
-        v-model="form.description"
-        class="min-w-40"
-        @keydown.enter="save"
-        @keydown.esc="editing = false"
-      />
+  <TableRow>
+    <TableCell class="w-px pr-0">
+      <span v-if="transaction.account" class="flex" :title="transaction.account.name">
+        <AccountLogo :account="transaction.account" />
+        <span class="sr-only">{{ transaction.account.name }}</span>
+      </span>
     </TableCell>
-    <TableCell class="space-y-2">
-      <CategorySelect v-model="form.category" :categories="categories" allow-transfer class="w-36" />
-      <template v-if="isTransfer">
-        <!-- Linked transfers show their other side; unlink first to change it -->
-        <div v-if="linked" class="flex items-center gap-1 text-xs text-muted-foreground">
-          <Link2 class="size-3.5" />
-          {{ transaction.transferAccount?.name }}
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Délier les deux côtés"
-            title="Délier les deux côtés"
-            @click="unlink"
-          >
-            <Unlink />
-          </Button>
-        </div>
-        <AccountSelect
-          v-else
-          v-model="form.transferAccount"
-          :accounts="otherAccounts"
-          placeholder="Autre compte"
-          class="w-36"
-        />
-      </template>
-    </TableCell>
-    <TableCell>
-      <Input
-        v-model="form.amount"
-        class="w-28 text-right"
-        @keydown.enter="save"
-        @keydown.esc="editing = false"
-      />
-    </TableCell>
-    <TableCell class="text-right">
-      <Button size="icon-sm" :disabled="saving" aria-label="Enregistrer" @click="save">
-        <Check />
-      </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        :disabled="saving"
-        aria-label="Annuler"
-        @click="editing = false"
-      >
-        <Undo2 />
-      </Button>
-    </TableCell>
-  </TableRow>
-
-  <TableRow v-else>
-    <TableCell class="whitespace-nowrap">{{ formatDate(transaction.date) }}</TableCell>
-    <TableCell>{{ transaction.account?.name }}</TableCell>
     <TableCell class="whitespace-normal">
-      {{ transaction.description }}
+      <div class="text-xs text-muted-foreground">{{ formatDate(transaction.date) }}</div>
+      <div class="break-words">{{ transaction.description }}</div>
       <div
         v-if="transaction.transferAccount"
         class="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"
         :title="linked ? 'Transfert lié à la transaction de l\'autre compte' : 'Transfert (autre côté non lié)'"
       >
-        <component :is="transaction.amountCents < 0 ? ArrowRight : ArrowLeft" class="size-3.5" />
+        <component :is="transaction.amountCents < 0 ? ArrowRight : ArrowLeft" class="size-3.5 shrink-0" />
         {{ transaction.amountCents < 0 ? 'Vers' : 'De' }} {{ transaction.transferAccount.name }}
-        <Link2 v-if="linked" class="size-3.5" />
+        <Link2 v-if="linked" class="size-3.5 shrink-0" />
       </div>
     </TableCell>
     <TableCell>
       <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
-      <Badge v-else-if="transaction.category" variant="outline">{{ transaction.category.name }}</Badge>
+      <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
+        <span class="truncate">{{ transaction.category.name }}</span>
+      </Badge>
     </TableCell>
     <TableCell
       class="text-right tabular-nums"
@@ -189,15 +66,30 @@ async function remove() {
     >
       {{ formatCents(transaction.amountCents) }}
     </TableCell>
-    <TableCell class="text-right">
-      <Button size="icon-sm" variant="ghost" aria-label="Modifier" @click="startEdit">
-        <Pencil />
-      </Button>
-      <ConfirmDialog title="Supprimer cette transaction ?" :description="transaction.description" @confirm="remove">
-        <Button size="icon-sm" variant="ghost" aria-label="Supprimer">
-          <Trash2 />
-        </Button>
-      </ConfirmDialog>
+    <TableCell class="w-px pl-0 text-right">
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button size="icon-sm" variant="ghost" aria-label="Actions" title="Actions">
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem @select="emit('edit')">
+            <Pencil />
+            Modifier
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" @select="confirmOpen = true">
+            <Trash2 />
+            Supprimer
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ConfirmDialog
+        v-model:open="confirmOpen"
+        title="Supprimer cette transaction ?"
+        :description="transaction.description"
+        @confirm="remove"
+      />
     </TableCell>
   </TableRow>
 </template>

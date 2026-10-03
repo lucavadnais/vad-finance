@@ -39,10 +39,13 @@ const projectionMonth = ref<Month>(currentMonth());
 </script>
 
 <template>
-  <!-- Mobile: one column. Tablet: accounts and import side by side. Desktop: they
-       become a sidebar next to forecasts and charts. Tables always span the full width -->
-  <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-[minmax(20rem,1fr)_2fr]">
-    <aside class="contents xl:flex xl:flex-col xl:gap-6 xl:self-start">
+  <!-- Mobile: one column. Tablet: accounts and import side by side, transactions
+       below them. Desktop: the three become a sidebar next to forecasts and charts -->
+  <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-[minmax(32rem,2fr)_3fr]">
+    <!-- Desktop: [contain:size] keeps the sidebar out of the row height, so it
+         stretches to the forecasts and charts column, and the transactions fill
+         what is left (scrolling inside) instead of pushing the page longer -->
+    <aside class="contents xl:flex xl:flex-col xl:gap-6 xl:[contain:size]">
       <Card>
         <CardHeader>
           <CardTitle>Comptes — total {{ formatCents(totalCents) }}</CardTitle>
@@ -68,13 +71,22 @@ const projectionMonth = ref<Month>(currentMonth());
         </CardContent>
       </Card>
 
-      <!-- Keeps its place after the charts on mobile -->
+      <!-- Import and transactions keep their place after the charts on mobile -->
       <CsvImport
         class="order-1 md:order-none"
         :accounts="accounts"
         :categories="categories"
         @imported="refresh"
         @created="refresh"
+        @error="setError"
+      />
+
+      <TransactionsTable
+        class="order-1 min-w-0 md:order-none md:col-span-2 xl:col-span-1 xl:min-h-80 xl:flex-1"
+        :accounts="accounts"
+        :categories="categories"
+        :version="dataVersion"
+        @changed="refresh"
         @error="setError"
       />
     </aside>
@@ -106,14 +118,6 @@ const projectionMonth = ref<Month>(currentMonth());
       />
 
       <DuplicateReview v-if="duplicatePairs.length > 0" :pairs="duplicatePairs" @changed="refresh" @error="setError" />
-
-      <TransactionsTable
-        :accounts="accounts"
-        :categories="categories"
-        :version="dataVersion"
-        @changed="refresh"
-        @error="setError"
-      />
     </div>
   </div>
 </template>

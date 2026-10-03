@@ -32,7 +32,7 @@ export interface Category {
 // GET /transactions populates account and category
 export interface Transaction {
   _id: string;
-  account: Pick<Account, '_id' | 'name'> | null;
+  account: Pick<Account, '_id' | 'name' | 'logoUpdatedAt'> | null;
   category: Category | null;
   date: string;
   description: string;

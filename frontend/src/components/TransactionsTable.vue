@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
 import { refDebounced, useMediaQuery } from '@vueuse/core';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Pagination,
@@ -16,15 +16,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import {
-  Table,
-  TableBody,
-  TableEmpty,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import OptionSelect from './OptionSelect.vue';
+import TransactionEditDialog from './TransactionEditDialog.vue';
 import TransactionRow from './TransactionRow.vue';
 
 // On a phone, fewer page numbers so the pagination fits
@@ -47,7 +41,10 @@ const total = ref(0);
 const loading = ref(false);
 // Searched on the server, a moment after the user stops typing
 const search = ref('');
-const query = refDebounced(computed(() => search.value.trim()), 300);
+const query = refDebounced(
+  computed(() => search.value.trim()),
+  300,
+);
 
 let requestId = 0;
 // True while `page` is set from a response, so that change does not reload
@@ -88,6 +85,14 @@ watch([pageSize, query], () => {
   else load();
 });
 
+// One edit popup for the whole table
+const editing = ref<Transaction | null>(null);
+const editOpen = ref(false);
+function edit(t: Transaction) {
+  editing.value = t;
+  editOpen.value = true;
+}
+
 const range = computed(() => {
   if (total.value === 0) return '';
   const first = (page.value - 1) * Number(pageSize.value) + 1;
@@ -104,7 +109,7 @@ const range = computed(() => {
         <template v-if="query">{{ total }} résultat(s) pour « {{ query }} ».</template>
         <template v-else>{{ total }} transaction(s), les plus récentes en premier.</template>
       </CardDescription>
-      <CardAction class="relative w-44 sm:w-80">
+      <div class="relative mt-2">
         <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           v-model="search"
@@ -124,36 +129,48 @@ const range = computed(() => {
         >
           <X />
         </Button>
-      </CardAction>
+      </div>
     </CardHeader>
-    <CardContent class="flex flex-col gap-4">
-      <!-- While the next page loads, the current one stays, dimmed -->
-      <Table :class="loading && 'opacity-60 transition-opacity'">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Compte</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Catégorie</TableHead>
-            <TableHead class="text-right">Montant</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TransactionRow
-            v-for="t in items"
-            :key="t._id"
-            :transaction="t"
-            :accounts="accounts"
-            :categories="categories"
-            @changed="emit('changed')"
-            @error="emit('error', $event)"
-          />
-          <TableEmpty v-if="items.length === 0 && !loading" :colspan="6">
-            {{ query ? 'Aucune transaction ne correspond à la recherche' : 'Aucune transaction' }}
-          </TableEmpty>
-        </TableBody>
-      </Table>
+    <!-- When the parent caps the card's height, the rows scroll under a sticky
+         header and the pagination stays visible -->
+    <CardContent class="@container flex min-h-0 flex-1 flex-col gap-4">
+      <div
+        class="flex min-h-0 flex-1 flex-col *:data-[slot=table-container]:min-h-0 *:data-[slot=table-container]:flex-1"
+      >
+        <!-- While the next page loads, the current one stays, dimmed -->
+        <Table :class="loading && 'opacity-60 transition-opacity'">
+          <TableHeader class="sticky top-0 z-10 bg-card">
+            <TableRow>
+              <TableHead class="w-px pr-0"><span class="sr-only">Compte</span></TableHead>
+              <TableHead>Transaction</TableHead>
+              <TableHead>Catégorie</TableHead>
+              <TableHead class="text-right">Montant</TableHead>
+              <TableHead class="w-px"><span class="sr-only">Actions</span></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TransactionRow
+              v-for="t in items"
+              :key="t._id"
+              :transaction="t"
+              @edit="edit(t)"
+              @changed="emit('changed')"
+              @error="emit('error', $event)"
+            />
+            <TableEmpty v-if="items.length === 0 && !loading" :colspan="5">
+              {{ query ? 'Aucune transaction ne correspond à la recherche' : 'Aucune transaction' }}
+            </TableEmpty>
+          </TableBody>
+        </Table>
+      </div>
+
+      <TransactionEditDialog
+        v-model:open="editOpen"
+        :transaction="editing"
+        :accounts="accounts"
+        :categories="categories"
+        @changed="emit('changed')"
+      />
 
       <div v-if="total > 0" class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -173,7 +190,7 @@ const range = computed(() => {
           <PaginationContent v-slot="{ items: pages }">
             <PaginationPrevious>
               <ChevronLeft />
-              <span class="hidden sm:block">Précédent</span>
+              <span class="hidden @lg:block">Précédent</span>
             </PaginationPrevious>
             <template v-for="(item, index) in pages" :key="index">
               <PaginationItem v-if="item.type === 'page'" :value="item.value" :is-active="item.value === current">
@@ -182,7 +199,7 @@ const range = computed(() => {
               <PaginationEllipsis v-else :index="index" />
             </template>
             <PaginationNext>
-              <span class="hidden sm:block">Suivant</span>
+              <span class="hidden @lg:block">Suivant</span>
               <ChevronRight />
             </PaginationNext>
           </PaginationContent>

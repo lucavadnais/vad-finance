@@ -4,9 +4,23 @@
   "private": true,
   "scripts": {
     "setup": "npm install --no-audit --no-fund && npm install --prefix backend --no-audit --no-fund && npm install --prefix frontend --no-audit --no-fund",
-    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
-  }
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^9.2.0",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vue-eslint-parser": "^10.4.1"
+  },
+  "type": "module"
 }

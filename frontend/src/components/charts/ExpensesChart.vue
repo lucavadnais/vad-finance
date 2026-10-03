@@ -55,9 +55,7 @@ const triggers = {
 
 // Clicking the same segment again closes the list
 function select(selection: ChartSelection) {
-  const same =
-    props.selection?.bucket === selection.bucket &&
-    props.selection?.keys.join() === selection.keys.join();
+  const same = props.selection?.bucket === selection.bucket && props.selection?.keys.join() === selection.keys.join();
   emit('select', same ? null : selection);
 }
 
@@ -77,8 +75,10 @@ const barEvents = {
   <Card>
     <Tabs v-model="view" class="gap-6">
       <CardHeader>
-        <CardTitle>{{ title }}</CardTitle>
-        <CardDescription>{{ description }}</CardDescription>
+        <div>
+          <CardTitle>{{ title }}</CardTitle>
+          <CardDescription>{{ description }}</CardDescription>
+        </div>
         <CardAction class="flex flex-wrap justify-end gap-2">
           <!-- Extra controls from the parent (the week / month choice): they
                shape the bars and the table, not the share of the period -->
@@ -96,7 +96,7 @@ const barEvents = {
         </p>
         <template v-else>
           <TabsContent value="chart">
-            <ChartContainer :config="config" class="aspect-auto h-72">
+            <ChartContainer :config="config" class="aspect-auto h-74 mt-2">
               <VisXYContainer :data="rows" :x-domain="xDomain" :margin="{ left: 8, right: 8 }">
                 <VisStackedBar
                   :x="(_: Row, i: number) => i"

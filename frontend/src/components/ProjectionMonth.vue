@@ -53,7 +53,7 @@ async function remove(p: Projection) {
   <Card>
     <CardHeader>
       <CardTitle class="flex min-h-8 items-center gap-1 text-lg">
-        <span class="first-letter:uppercase">{{ monthLabel(month) }}</span>
+        Prévisions -<span class="first-letter:uppercase">{{ monthLabel(month) }}</span>
         <Button
           v-if="!isCurrent"
           size="icon-sm"

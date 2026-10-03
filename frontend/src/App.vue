@@ -15,7 +15,7 @@ const NAV = [
 </script>
 
 <template>
-  <main class="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8">
+  <main class="mx-auto flex max-w-screen-2xl flex-col gap-6 px-4 py-8 md:px-6 xl:px-8">
     <header class="flex flex-wrap items-center gap-4">
       <h1 class="mr-auto text-3xl font-semibold">Mes finances</h1>
       <nav class="flex gap-1" aria-label="Menu principal">

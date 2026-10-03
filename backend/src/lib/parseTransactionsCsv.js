@@ -34,7 +34,7 @@ export function parseTransactionsCsv(text) {
   const transactions = [];
   const errors = [];
 
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
   const first = lines.findIndex((line) => line.trim());
   if (first === -1) return { transactions, errors };
 

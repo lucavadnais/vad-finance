@@ -23,7 +23,9 @@ app.use('/api/transfers', transfersRouter);
 app.use('/api/duplicates', duplicatesRouter);
 app.use('/api/projections', projectionsRouter);
 
-// Express 5 forwards rejected promises from async handlers here
+// Express 5 forwards rejected promises from async handlers here.
+// It spots error handlers by their 4 parameters, so `next` must stay
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   // Errors thrown by our own code with an HTTP status (see lib/transfers.js)
   if (err.status) return res.status(err.status).json({ error: err.message });

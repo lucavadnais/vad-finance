@@ -6,24 +6,21 @@ import type { ChartConfig } from '@/components/ui/chart';
 import type { Row, Series } from '@/lib/chartData';
 import type { Month } from '@/lib/projections';
 import type { Category, Projection } from '@/types';
-import type { ProjectionRow } from '../ProjectionTable.vue';
 import { computed, ref } from 'vue';
 import { GroupedBar } from '@unovis/ts';
 import { VisAxis, VisGroupedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
-import { X } from '@lucide/vue';
-import { formatCents, formatCentsCompact } from '@/api';
-import { Button } from '@/components/ui/button';
+import { formatCentsCompact } from '@/api';
 import { addMonths, currentMonth, monthLabel, occurrences, totals } from '@/lib/projections';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProjectionCalendar from '../ProjectionCalendar.vue';
-import ProjectionTable from '../ProjectionTable.vue';
 import SeriesTable from './SeriesTable.vue';
 import { tooltipTemplate } from './tooltip';
 
 const props = defineProps<{ projections: Projection[]; categories: Category[] }>();
 const selected = defineModel<Month>({ required: true });
-const emit = defineEmits<{ edit: [projection: Projection] }>();
+// pick: a month was clicked in the chart (its detail is shown above)
+const emit = defineEmits<{ edit: [projection: Projection]; pick: [] }>();
 
 const MONTHS = 12;
 const SERIES: Series[] = [
@@ -46,25 +43,6 @@ const rows = computed<Row[]>(() =>
     };
   }),
 );
-
-// The clicked month's projections, under the chart until closed
-const showMonth = ref(false);
-const monthRows = computed<ProjectionRow[]>(() => {
-  const byProjection = new Map<string, { projection: Projection; days: number[]; signedCents: number }>();
-  for (const o of occurrences(props.projections, selected.value)) {
-    const row = byProjection.get(o.projection._id);
-    if (row) {
-      row.days.push(o.day);
-      row.signedCents += o.signedCents;
-    } else byProjection.set(o.projection._id, { projection: o.projection, days: [o.day], signedCents: o.signedCents });
-  }
-  return [...byProjection.values()].map(({ projection, days, signedCents }) => ({
-    projection,
-    date: days.join(', '),
-    signedCents,
-    detail: days.length > 1 ? `${days.length} × ${formatCents(signedCents / days.length)}` : undefined,
-  }));
-});
 
 // A little room above the highest bar, so its rounded top is not cut off
 const yDomain = computed<[number, number]>(() => [
@@ -95,7 +73,7 @@ const events = {
     click: (d: Row) => {
       const m = months.find((m) => Date.UTC(m.year, m.month, 1) === d.t);
       if (m) selected.value = m;
-      showMonth.value = true;
+      emit('pick');
     },
   },
 };
@@ -144,22 +122,6 @@ const events = {
           </VisXYContainer>
           <ChartLegendContent />
         </ChartContainer>
-        <section v-if="showMonth" class="flex max-h-96 min-h-0 flex-col rounded-lg border">
-          <div class="flex items-center gap-2 border-b py-1 pr-1 pl-3">
-            <h4 class="mr-auto text-sm font-medium first-letter:uppercase">{{ monthLabel(selected) }}</h4>
-            <Button size="icon-sm" variant="ghost" aria-label="Fermer le détail du mois" @click="showMonth = false">
-              <X />
-            </Button>
-          </div>
-          <div class="flex min-h-0 flex-1 flex-col px-1">
-            <ProjectionTable
-              :rows="monthRows"
-              :categories="categories"
-              date-label="Jours"
-              empty="Rien de prévu ce mois-là"
-            />
-          </div>
-        </section>
       </div>
     </TabsContent>
     <TabsContent value="calendar">

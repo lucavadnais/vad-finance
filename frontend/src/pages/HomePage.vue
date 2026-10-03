@@ -34,7 +34,7 @@ const {
 
 const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
 
-// Projected month shown in detail; its chart picks it too
+// Month shown by the budget card (its forecasts chart picks it too)
 const projectionMonth = ref<Month>(currentMonth());
 </script>
 
@@ -95,6 +95,7 @@ const projectionMonth = ref<Month>(currentMonth());
       <ProjectionMonth
         v-model="projectionMonth"
         :projections="projections"
+        :transactions="transactions"
         :categories="categories"
         @changed="refresh"
         @error="setError"

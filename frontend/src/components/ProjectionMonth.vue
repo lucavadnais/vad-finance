@@ -1,14 +1,16 @@
 <script setup lang="ts">
-// Projections of the month picked in the next 12 months chart: its net, then
-// the chart. "Gérer les prévisions" lists them all, to edit or delete.
-import type { Category, Projection } from '@/types';
+// Budget of a month: net, income and spending against the forecasts (with the
+// detail by category), then the next 12 months chart, which also picks the
+// month. "Gérer les prévisions" lists them all, to edit or delete.
+import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { computed, defineAsyncComponent, ref } from 'vue';
-import { Plus, RotateCcw } from '@lucide/vue';
-import { api, formatCents } from '@/api';
-import { currentMonth, monthLabel, occurrences, sameMonth, totals } from '@/lib/projections';
+import { ChevronLeft, ChevronRight, ListChecks, Plus, RotateCcw } from '@lucide/vue';
+import { api } from '@/api';
+import { addMonths, currentMonth, monthLabel, sameMonth } from '@/lib/projections';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import BudgetSummary from './BudgetSummary.vue';
 import ProjectionDialog from './ProjectionDialog.vue';
 import ProjectionListDialog from './ProjectionListDialog.vue';
 
@@ -16,8 +18,9 @@ import ProjectionListDialog from './ProjectionListDialog.vue';
 const ProjectionsChart = defineAsyncComponent(() => import('./charts/ProjectionsChart.vue'));
 
 const month = defineModel<Month>({ required: true });
-const props = defineProps<{
+defineProps<{
   projections: Projection[];
+  transactions: Transaction[];
   categories: Category[];
 }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
@@ -25,10 +28,12 @@ const emit = defineEmits<{ changed: []; error: [message: string] }>();
 const now = currentMonth();
 const isCurrent = computed(() => sameMonth(month.value, now));
 
-const sums = computed(() => totals(occurrences(props.projections, month.value)));
-
 // Dialog listing them all
 const listOpen = ref(false);
+
+// Side of the budget shown by category; picking a month in the chart opens
+// the spending if none is
+const expanded = ref<'income' | 'expense' | null>(null);
 
 // Dialog adding a projection, or editing `editing`
 const dialogOpen = ref(false);
@@ -52,47 +57,56 @@ async function remove(p: Projection) {
 <template>
   <Card>
     <CardHeader>
-      <CardTitle class="flex min-h-8 items-center gap-1 text-lg">
-        Prévisions -<span class="first-letter:uppercase">{{ monthLabel(month) }}</span>
-        <Button
-          v-if="!isCurrent"
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Revenir au mois courant"
-          title="Revenir au mois courant"
-          @click="month = now"
-        >
-          <RotateCcw />
-        </Button>
+      <CardTitle class="flex min-h-8 flex-wrap items-center gap-1 text-lg">
+        Budget
+        <span class="ml-2 flex items-center gap-1 text-sm font-medium">
+          <Button size="icon-sm" variant="ghost" aria-label="Mois précédent" @click="month = addMonths(month, -1)">
+            <ChevronLeft />
+          </Button>
+          <span class="min-w-28 text-center first-letter:uppercase">{{ monthLabel(month) }}</span>
+          <Button size="icon-sm" variant="ghost" aria-label="Mois suivant" @click="month = addMonths(month, 1)">
+            <ChevronRight />
+          </Button>
+          <Button
+            v-if="!isCurrent"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Revenir au mois courant"
+            title="Revenir au mois courant"
+            @click="month = now"
+          >
+            <RotateCcw />
+          </Button>
+        </span>
       </CardTitle>
       <CardAction class="flex flex-wrap items-center justify-end gap-2">
-        <Button v-if="projections.length > 0" variant="link" @click="listOpen = true">Gérer les prévisions</Button>
-        <Button @click="openDialog(null)">
+        <!-- Icons only on a phone, so the header fits next to the month -->
+        <Button
+          v-if="projections.length > 0"
+          variant="ghost"
+          aria-label="Gérer les prévisions"
+          title="Gérer les prévisions"
+          class="max-sm:size-9"
+          @click="listOpen = true"
+        >
+          <ListChecks />
+          <span class="max-sm:sr-only">Gérer les prévisions</span>
+        </Button>
+        <Button aria-label="Ajouter une prévision" class="max-sm:size-9" @click="openDialog(null)">
           <Plus />
-          Prévision
+          <span class="max-sm:sr-only">Prévision</span>
         </Button>
       </CardAction>
     </CardHeader>
     <CardContent class="flex flex-col gap-4">
-      <div class="rounded-lg border p-4">
-        <div class="text-sm text-muted-foreground">Net</div>
-        <div
-          class="text-3xl font-semibold tabular-nums"
-          :class="sums.netCents < 0 ? 'text-destructive' : sums.netCents > 0 ? 'text-emerald-600' : ''"
-        >
-          {{ formatCents(sums.netCents) }}
-        </div>
-        <dl class="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-          <div class="flex gap-1.5">
-            <dt class="text-muted-foreground">À recevoir</dt>
-            <dd class="tabular-nums text-emerald-600">{{ formatCents(sums.incomeCents) }}</dd>
-          </div>
-          <div class="flex gap-1.5">
-            <dt class="text-muted-foreground">Dépenses prévues</dt>
-            <dd class="tabular-nums text-destructive">{{ formatCents(-sums.expenseCents) }}</dd>
-          </div>
-        </dl>
-      </div>
+      <BudgetSummary
+        v-model:expanded="expanded"
+        :month="month"
+        :projections="projections"
+        :transactions="transactions"
+        :categories="categories"
+        @edit="openDialog"
+      />
 
       <!-- Picks the month shown above it -->
       <ProjectionsChart
@@ -101,6 +115,7 @@ async function remove(p: Projection) {
         :projections="projections"
         :categories="categories"
         @edit="openDialog"
+        @pick="expanded ??= 'expense'"
       />
 
       <ProjectionListDialog

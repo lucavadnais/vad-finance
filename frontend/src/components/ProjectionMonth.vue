@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Budget of a month: net, income and spending against the forecasts (with the
-// detail by category), then the next 12 months chart, which also picks the
-// month. "Gérer les prévisions" lists them all, to edit or delete.
+// detail by category), then the next 12 months chart. "Gérer les prévisions"
+// lists them all, to edit or delete.
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { computed, defineAsyncComponent, ref } from 'vue';
@@ -31,8 +31,7 @@ const isCurrent = computed(() => sameMonth(month.value, now));
 // Dialog listing them all
 const listOpen = ref(false);
 
-// Side of the budget shown by category; picking a month in the chart opens
-// the spending if none is
+// Side of the budget shown by category (income or spending tile clicked)
 const expanded = ref<'income' | 'expense' | null>(null);
 
 // Dialog adding a projection, or editing `editing`
@@ -115,7 +114,6 @@ async function remove(p: Projection) {
         :projections="projections"
         :categories="categories"
         @edit="openDialog"
-        @pick="expanded ??= 'expense'"
       />
 
       <ProjectionListDialog

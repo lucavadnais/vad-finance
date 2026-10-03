@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Projected expenses and amounts to receive over the next 12 months, side by
-// side, or the picked month as a calendar; clicking a month shows it in detail
-// below, and its projections under the chart, one row each with the month's total
+// side (the month shown by the budget card highlighted, clicking another one
+// shows it there), or that month as a calendar
 import type { ChartConfig } from '@/components/ui/chart';
 import type { Row, Series } from '@/lib/chartData';
 import type { Month } from '@/lib/projections';
@@ -19,8 +19,7 @@ import { tooltipTemplate } from './tooltip';
 
 const props = defineProps<{ projections: Projection[]; categories: Category[] }>();
 const selected = defineModel<Month>({ required: true });
-// pick: a month was clicked in the chart (its detail is shown above)
-const emit = defineEmits<{ edit: [projection: Projection]; pick: [] }>();
+const emit = defineEmits<{ edit: [projection: Projection] }>();
 
 const MONTHS = 12;
 const SERIES: Series[] = [
@@ -60,7 +59,7 @@ const tickLabel = (i: number) => {
   if (index === 0 || m.month === 0) return monthLabel(m, 'short');
   return new Date(Date.UTC(m.year, m.month, 1)).toLocaleDateString('fr-CA', { timeZone: 'UTC', month: 'short' });
 };
-// The month shown below stays highlighted, the others fade
+// The month shown by the budget card stays highlighted, the others fade
 // A new function on each change: Unovis only redraws when its props change
 const barStyle = computed(() => {
   const t = Date.UTC(selected.value.year, selected.value.month, 1);
@@ -68,12 +67,12 @@ const barStyle = computed(() => {
 });
 
 const triggers = { [GroupedBar.selectors.bar]: tooltipTemplate(() => config) };
+// Clicking a month shows it in the budget card above
 const events = {
   [GroupedBar.selectors.bar]: {
     click: (d: Row) => {
       const m = months.find((m) => Date.UTC(m.year, m.month, 1) === d.t);
       if (m) selected.value = m;
-      emit('pick');
     },
   },
 };
@@ -84,7 +83,7 @@ const events = {
     <div class="flex flex-wrap items-center gap-2">
       <div class="mr-auto">
         <h3 class="text-sm font-medium">12 prochains mois</h3>
-        <p v-if="view !== 'calendar'" class="text-sm text-muted-foreground">Clique sur un mois pour voir son détail.</p>
+        <p v-if="view !== 'calendar'" class="text-sm text-muted-foreground">Clique sur un mois pour l'afficher.</p>
         <p v-else class="text-sm text-muted-foreground">Clique sur une prévision pour la modifier.</p>
       </div>
       <TabsList>

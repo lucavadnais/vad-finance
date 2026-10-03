@@ -9,6 +9,7 @@ import transfersRouter from './routes/transfers.js';
 import duplicatesRouter from './routes/duplicates.js';
 import projectionsRouter from './routes/projections.js';
 import { migrateProjections } from './models/Projection.js';
+import { migrateColors } from './lib/colors.js';
 
 const app = express();
 app.use(cors());
@@ -44,4 +45,5 @@ const port = process.env.PORT || 3000;
 
 await connectDb(process.env.MONGO_URL);
 await migrateProjections();
+await migrateColors();
 app.listen(port, () => console.log(`API listening on port ${port}`));

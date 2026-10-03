@@ -1,5 +1,6 @@
 // Aggregations behind the dashboard charts. Everything is in cents.
 import type { Account, Category, CategoryGroup, Transaction } from '@/types';
+import { NO_COLOR } from './colors';
 
 export type Period = 'week' | 'month' | '6m' | '12m' | 'year' | 'all';
 
@@ -21,11 +22,13 @@ export interface Series {
 // A row per bucket (week, month, date) with one numeric column per series key
 export type Row = { label: string; t: number } & Record<string, number | string>;
 
-// Categorical slots, in the validated order (CSS variables in index.css)
+// Categorical slots for the accounts, in the validated order (CSS variables in
+// index.css). Categories have their own colors (lib/colors.ts).
 const SLOTS = 10;
 const slot = (i: number) => `var(--series-${i + 1})`;
 const NONE_KEY = 'none';
-// Series key of the categories (or accounts) folded past the color slots
+// Series key of what is folded into "Autres" (accounts past the slots, small
+// donut slices)
 export const OTHER_KEY = 'other';
 
 // First day (UTC) of the period, or null for all time
@@ -45,12 +48,6 @@ export function periodStart(period: Period, now = new Date()): Date | null {
 // credit card from the checking account is not an expense: the card purchases are)
 export const isExpense = (t: Transaction) => t.amountCents < 0 && !t.transferAccount;
 
-// What a category is counted under: itself, or its group when grouping is on
-interface Entity {
-  key: string;
-  label: string;
-}
-
 export interface ExpenseSeries {
   series: Series[];
   // Series key a transaction's spending goes to
@@ -59,71 +56,41 @@ export interface ExpenseSeries {
 
 // Expense series, one per category - or per group of categories when `grouped`
 // is on (categories without a group stay on their own) - spent on since
-// `from`, by name. Colors follow the entity, not the period: the entities with
-// the most spending over all time own the slots. Others spent on in the period
-// borrow a slot left free by the owners absent from it, and only fold into
-// "Autres" when the period has more entities than slots. Uncategorized
-// spending is gray.
+// `from`, by name. Each one wears its color: the category's displayed color
+// (`colors`, see lib/colors.ts), or the group's. Uncategorized spending is gray.
 export function expenseSeries(
   transactions: Transaction[],
   categories: Category[],
   groups: CategoryGroup[],
+  colors: Map<string, string>,
   grouped: boolean,
   from: Date | null = null,
 ): ExpenseSeries {
   const groupById = new Map(groups.map((g) => [g._id, g]));
-  const entityOf = new Map<string, Entity>();
+  const entityOf = new Map<string, Series>();
   for (const c of categories) {
     const g = grouped && c.group ? groupById.get(c.group) : undefined;
-    entityOf.set(c._id, g ? { key: `group:${g._id}`, label: g.name } : { key: c._id, label: c.name });
+    entityOf.set(
+      c._id,
+      g
+        ? { key: `group:${g._id}`, label: g.name, color: g.color ?? NO_COLOR }
+        : { key: c._id, label: c.name, color: colors.get(c._id) ?? NO_COLOR },
+    );
   }
 
-  // Spending per entity over all time, and the entities spent on in the period
-  const spent = new Map<string, number>();
-  const entities = new Map<string, Entity>();
-  const inPeriod = new Set<string>();
+  const present = new Map<string, Series>();
   let uncategorized = false;
   for (const t of transactions) {
-    if (!isExpense(t)) continue;
+    if (!isExpense(t) || (from && new Date(t.date) < from)) continue;
     const entity = t.category && entityOf.get(t.category._id);
-    const counted = !from || new Date(t.date) >= from;
-    if (!entity) {
-      uncategorized ||= counted;
-      continue;
-    }
-    entities.set(entity.key, entity);
-    spent.set(entity.key, (spent.get(entity.key) ?? 0) - t.amountCents);
-    if (counted) inPeriod.add(entity.key);
+    if (entity) present.set(entity.key, entity);
+    else uncategorized = true;
   }
 
-  // Slot owners: the top spenders over all time
-  const byName = (a: Entity, b: Entity) => a.label.localeCompare(b.label, 'fr');
-  const ranked = [...entities.values()].sort((a, b) => spent.get(b.key)! - spent.get(a.key)!);
-  const owners = ranked.slice(0, ranked.length > SLOTS ? SLOTS - 1 : SLOTS).sort(byName);
-  const slotOf = new Map(owners.map((e, i) => [e.key, i]));
-
-  // The period's entities: owners keep their slot, the others borrow a free one
-  // while there are enough for all of them
-  const present = [...inPeriod].map((k) => entities.get(k)!);
-  const guests = present.filter((e) => !slotOf.has(e.key)).sort(byName);
-  const taken = new Set(present.flatMap((e) => (slotOf.has(e.key) ? [slotOf.get(e.key)!] : [])));
-  const free = Array.from({ length: SLOTS }, (_, i) => i).filter((i) => !taken.has(i));
-  const color = new Map([...slotOf].filter(([k]) => inPeriod.has(k)));
-  const foldGuests = present.length > SLOTS;
-  if (!foldGuests) guests.forEach((e, i) => color.set(e.key, free[i]!));
-
-  const series: Series[] = present
-    .filter((e) => color.has(e.key))
-    .sort(byName)
-    .map((e) => ({ ...e, color: slot(color.get(e.key)!) }));
-  if (foldGuests) series.push({ key: OTHER_KEY, label: 'Autres', color: 'var(--series-other)' });
+  const series = [...present.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'));
   if (uncategorized) series.push({ key: NONE_KEY, label: 'Sans catégorie', color: 'var(--series-none)' });
 
-  const keyOf = (t: Transaction) => {
-    const entity = t.category && entityOf.get(t.category._id);
-    if (!entity) return NONE_KEY;
-    return color.has(entity.key) ? entity.key : OTHER_KEY;
-  };
+  const keyOf = (t: Transaction) => (t.category && entityOf.get(t.category._id)?.key) || NONE_KEY;
   return { series, keyOf };
 }
 
@@ -211,8 +178,7 @@ export interface ChartSelection {
 const BUCKETS = { day: dayBucket, week: weekBucket, month: monthBucket };
 
 // Start (UTC ms) of the day, week or month a date falls in: the `t` of its row
-export const bucketStart = (date: string | Date, granularity: Granularity) =>
-  BUCKETS[granularity](new Date(date)).t;
+export const bucketStart = (date: string | Date, granularity: Granularity) => BUCKETS[granularity](new Date(date)).t;
 
 export const expensesByMonth = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
   expensesBy(monthBucket, (b) => addMonths(b, 1), tx, s, from, now);
@@ -243,8 +209,7 @@ export function balanceOverTime(
   from: Date | null,
   now = new Date(),
 ): Row[] {
-  const keyOf = (accountId: string | undefined) =>
-    series.some((s) => s.key === accountId) ? accountId! : OTHER_KEY;
+  const keyOf = (accountId: string | undefined) => (series.some((s) => s.key === accountId) ? accountId! : OTHER_KEY);
 
   const balance = new Map<string, number>(series.map((s) => [s.key, 0]));
   const add = (accountId: string | undefined, cents: number) => {

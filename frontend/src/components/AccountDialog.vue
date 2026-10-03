@@ -18,14 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AccountSelect from './AccountSelect.vue';
 import CategorySelect, { TRANSFER } from './CategorySelect.vue';
 import ParseErrors from './ParseErrors.vue';
@@ -38,8 +31,13 @@ const account = computed(() => props.accounts.find((a) => a._id === accountId.va
 
 // Our category named like the bank's one, ignoring case and accents
 const normalize = (name: string) =>
-  name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-const categoryByName = new Map(props.categories.map((c) => [normalize(c.name), c._id]));
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+// Archived categories are not picked for new transactions
+const categoryByName = new Map(props.categories.filter((c) => !c.archived).map((c) => [normalize(c.name), c._id]));
 
 // Editable copy of the parsed rows. `category` may be TRANSFER: the row is then
 // a transfer to or from `transferAccount`
@@ -164,11 +162,7 @@ async function submit() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow
-                  v-for="(t, i) in rows"
-                  :key="i"
-                  :class="!selected[i] && 'opacity-50'"
-                >
+                <TableRow v-for="(t, i) in rows" :key="i" :class="!selected[i] && 'opacity-50'">
                   <TableCell>
                     <Checkbox v-model="selected[i]" :aria-label="`Importer ${t.description}`" />
                   </TableCell>
@@ -215,9 +209,7 @@ async function submit() {
             <template v-else-if="checking">Recherche des doublons…</template>
             <template v-else>
               {{ selectedCount }} transaction(s) sur {{ count }} seront ajoutées à « {{ account.name }} ».
-              <template v-if="exactCount > 0">
-                {{ exactCount }} déjà présente(s), décochée(s).
-              </template>
+              <template v-if="exactCount > 0"> {{ exactCount }} déjà présente(s), décochée(s). </template>
               <template v-if="possibleCount > 0">
                 {{ possibleCount }} doublon(s) possible(s) à vérifier : décoche celles déjà saisies.
               </template>
@@ -228,9 +220,7 @@ async function submit() {
         </DialogBody>
 
         <DialogFooter>
-          <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')">
-            Annuler
-          </Button>
+          <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')"> Annuler </Button>
           <Button type="submit" :disabled="!account || saving || checking || selectedCount === 0">
             {{ saving ? 'Import…' : 'Importer' }}
           </Button>

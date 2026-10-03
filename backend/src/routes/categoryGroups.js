@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { FRENCH } from '../db.js';
+import { pickColor, usedColors } from '../lib/colors.js';
 import Category from '../models/Category.js';
 import CategoryGroup from '../models/CategoryGroup.js';
 
@@ -9,13 +10,22 @@ router.get('/', async (req, res) => {
   res.json(await CategoryGroup.find().sort({ name: 1 }).collation(FRENCH));
 });
 
+const editable = ({ name, color }) =>
+  Object.fromEntries(Object.entries({ name, color }).filter(([, v]) => v !== undefined));
+
+// Without a color, one is drawn among the least used
 router.post('/', async (req, res) => {
-  const group = await CategoryGroup.create(req.body);
+  const fields = editable(req.body);
+  if (!fields.color) fields.color = pickColor(await usedColors());
+  const group = await CategoryGroup.create(fields);
   res.status(201).json(group);
 });
 
+// Rename or recolor ({ color: null } draws a new color)
 router.put('/:id', async (req, res) => {
-  const group = await CategoryGroup.findByIdAndUpdate(req.params.id, req.body, {
+  const fields = editable(req.body);
+  if (fields.color === null || fields.color === '') fields.color = pickColor(await usedColors(req.params.id));
+  const group = await CategoryGroup.findByIdAndUpdate(req.params.id, fields, {
     new: true,
     runValidators: true,
   });

@@ -15,10 +15,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
 import AccountLogo from './AccountLogo.vue';
+import { useFinanceData } from '@/composables/useFinanceData';
+import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 
 const props = defineProps<{ transaction: Transaction }>();
 const emit = defineEmits<{ edit: []; changed: []; error: [message: string] }>();
+
+const { categoryColors } = useFinanceData();
 
 const confirmOpen = ref(false);
 const linked = computed(() => !!props.transaction.transferPeer);
@@ -57,6 +61,7 @@ async function remove() {
     <TableCell>
       <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
       <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
+        <CategoryDot :color="categoryColors.get(transaction.category._id)" />
         <span class="truncate">{{ transaction.category.name }}</span>
       </Badge>
     </TableCell>

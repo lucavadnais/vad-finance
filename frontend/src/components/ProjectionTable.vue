@@ -8,15 +8,9 @@ import { formatCents } from '@/api';
 import { recurrenceLabel } from '@/lib/projections';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableEmpty,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useFinanceData } from '@/composables/useFinanceData';
+import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 
 export interface ProjectionRow {
@@ -41,6 +35,8 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ edit: [projection: Projection]; remove: [projection: Projection] }>();
 
+const { categoryColors } = useFinanceData();
+
 const categoryName = (id: string | null) => props.categories.find((c) => c._id === id)?.name;
 </script>
 
@@ -59,6 +55,7 @@ const categoryName = (id: string | null) => props.categories.find((c) => c._id =
         <TableCell class="whitespace-normal">
           <span class="font-medium">{{ r.projection.name }}</span>
           <Badge v-if="categoryName(r.projection.category)" variant="outline" class="ml-2 whitespace-normal">
+            <CategoryDot :color="categoryColors.get(r.projection.category!)" />
             {{ categoryName(r.projection.category) }}
           </Badge>
           <div class="text-xs text-muted-foreground">{{ recurrenceLabel(r.projection) }}</div>

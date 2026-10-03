@@ -8,6 +8,7 @@ export const TRANSFER = 'transfer';
 import type { HTMLAttributes } from 'vue';
 import type { Category, CategoryKind } from '@/types';
 import { computed } from 'vue';
+import { Settings2 } from '@lucide/vue';
 import {
   Select,
   SelectContent,
@@ -19,6 +20,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CATEGORY_KINDS } from '@/lib/labels';
+import { useFinanceData } from '@/composables/useFinanceData';
+import { useSettings } from '@/composables/useSettings';
+import CategoryDot from './CategoryDot.vue';
 
 const model = defineModel<string | null>({ default: null });
 const props = defineProps<{
@@ -29,16 +33,28 @@ const props = defineProps<{
   class?: HTMLAttributes['class'];
 }>();
 
+const { categoryColors } = useFinanceData();
+
 // Select items cannot have an empty value, so "no category" uses a sentinel
 const NONE = 'none';
+// Last item: opens the settings on the categories, without changing the value
+const MANAGE = 'manage';
+const { openSettings } = useSettings();
 const value = computed({
   get: () => model.value ?? NONE,
-  set: (v: string) => (model.value = v === NONE ? null : v),
+  set: (v: string) => {
+    if (v === MANAGE) openSettings('categories');
+    else model.value = v === NONE ? null : v;
+  },
 });
+
+// Archived categories are not offered, except the one already picked (editing
+// a past transaction keeps showing its category)
+const offered = computed(() => props.categories.filter((c) => !c.archived || c._id === model.value));
 
 const groups = computed(() =>
   (Object.entries(CATEGORY_KINDS) as [CategoryKind, string][])
-    .map(([kind, label]) => ({ kind, label, items: props.categories.filter((c) => c.kind === kind) }))
+    .map(([kind, label]) => ({ kind, label, items: offered.value.filter((c) => c.kind === kind) }))
     .filter((g) => g.items.length > 0),
 );
 </script>
@@ -54,13 +70,22 @@ const groups = computed(() =>
         <SelectSeparator />
         <SelectGroup>
           <SelectLabel>{{ g.label }}</SelectLabel>
-          <SelectItem v-for="c in g.items" :key="c._id" :value="c._id">{{ c.name }}</SelectItem>
+          <SelectItem v-for="c in g.items" :key="c._id" :value="c._id">
+            <CategoryDot :color="categoryColors.get(c._id)" />
+            {{ c.name }}
+            <span v-if="c.archived" class="text-muted-foreground">(archivée)</span>
+          </SelectItem>
         </SelectGroup>
       </template>
       <template v-if="allowTransfer">
         <SelectSeparator />
         <SelectItem :value="TRANSFER">Transfert</SelectItem>
       </template>
+      <SelectSeparator />
+      <SelectItem :value="MANAGE" class="text-muted-foreground">
+        <Settings2 />
+        Gérer les catégories…
+      </SelectItem>
     </SelectContent>
   </Select>
 </template>

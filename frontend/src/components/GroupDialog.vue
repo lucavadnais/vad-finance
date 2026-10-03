@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// Dialog creating a category group; opened by the parent through v-model:open
+// Creates a category group, or edits `group`: name and color (its categories
+// take shades of it). Opened through v-model:open.
 import type { CategoryGroup } from '@/types';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,18 +16,24 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import CategoryColorPicker from './CategoryColorPicker.vue';
 
 const open = defineModel<boolean>('open', { required: true });
-const emit = defineEmits<{ created: [group: CategoryGroup] }>();
+const props = defineProps<{ group?: CategoryGroup | null }>();
+const emit = defineEmits<{ saved: [group: CategoryGroup] }>();
 
+const editing = computed(() => !!props.group);
 const name = ref('');
+// null: the backend draws a color
+const color = ref<string | null>(null);
 const saving = ref(false);
 const error = ref('');
 
-// Every opening starts from an empty form
+// Every opening starts from the group, or an empty form
 watch(open, (value) => {
   if (!value) return;
-  name.value = '';
+  name.value = props.group?.name ?? '';
+  color.value = props.group?.color ?? null;
   error.value = '';
 });
 
@@ -38,9 +45,12 @@ async function submit() {
   saving.value = true;
   error.value = '';
   try {
-    const group = await api.createCategoryGroup({ name: name.value });
+    const body = { name: name.value, color: color.value };
+    const saved = props.group
+      ? await api.updateCategoryGroup(props.group._id, body)
+      : await api.createCategoryGroup(body);
     open.value = false;
-    emit('created', group);
+    emit('saved', saved);
   } catch (err) {
     error.value = (err as Error).message;
   } finally {
@@ -54,8 +64,10 @@ async function submit() {
     <DialogContent class="sm:max-w-sm">
       <form class="flex flex-col gap-4" @submit.prevent="submit">
         <DialogHeader>
-          <DialogTitle>Nouveau groupe</DialogTitle>
-          <DialogDescription>Rassemble plusieurs catégories pour l'analyse.</DialogDescription>
+          <DialogTitle>{{ editing ? 'Modifier le groupe' : 'Nouveau groupe' }}</DialogTitle>
+          <DialogDescription>
+            Rassemble plusieurs catégories pour l'analyse. Elles prennent des nuances de sa couleur.
+          </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
@@ -63,15 +75,19 @@ async function submit() {
             <Label for="group-name">Nom</Label>
             <Input id="group-name" v-model="name" placeholder="Milieu de vie" required />
           </div>
+          <div class="flex flex-col gap-2">
+            <Label for="group-color">Couleur</Label>
+            <CategoryColorPicker id="group-color" v-model="color" class="w-36" />
+          </div>
 
           <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
         </DialogBody>
 
         <DialogFooter>
-          <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)">
-            Annuler
+          <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)">Annuler</Button>
+          <Button type="submit" :disabled="saving">
+            {{ saving ? 'Enregistrement…' : editing ? 'Enregistrer' : 'Créer le groupe' }}
           </Button>
-          <Button type="submit" :disabled="saving">{{ saving ? 'Création…' : 'Créer le groupe' }}</Button>
         </DialogFooter>
       </form>
     </DialogContent>

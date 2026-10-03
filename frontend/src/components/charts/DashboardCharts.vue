@@ -15,6 +15,7 @@ import {
   isExpense,
   periodStart,
 } from '@/lib/chartData';
+import { useFinanceData } from '@/composables/useFinanceData';
 import { Card, CardAction, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -34,9 +35,10 @@ const period = ref<Period>('month');
 const from = computed(() => periodStart(period.value));
 
 // Count grouped categories under their group (e.g. "Milieu de vie")
+const { categoryColors } = useFinanceData();
 const grouped = ref(false);
 const expenses = computed(() =>
-  expenseSeries(props.transactions, props.categories, props.groups, grouped.value, from.value),
+  expenseSeries(props.transactions, props.categories, props.groups, categoryColors.value, grouped.value, from.value),
 );
 // Spending bucketed by week (Monday to Sunday) or month, as picked. This week
 // is by day instead: the "Jour" option then shows up, active, and week and

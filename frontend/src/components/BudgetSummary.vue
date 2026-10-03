@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
+import { useFinanceData } from '@/composables/useFinanceData';
+import CategoryDot from './CategoryDot.vue';
 
 const props = defineProps<{
   month: Month;
@@ -23,6 +25,9 @@ const props = defineProps<{
   categories: Category[];
 }>();
 const emit = defineEmits<{ edit: [projection: Projection] }>();
+
+// Rows of a category are keyed by its id (see lib/budget.ts)
+const { categoryColors } = useFinanceData();
 
 // Section summary, added up category by category (a net total would let an
 // overrun in one category hide behind a bill not charged yet in another):
@@ -245,7 +250,10 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
           class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 text-sm @2xl:col-span-4 @2xl:grid-cols-subgrid"
         >
           <div class="min-w-0">
-            <div class="font-medium">{{ r.label }}</div>
+            <div class="flex items-center gap-2 font-medium">
+              <CategoryDot :color="categoryColors.get(r.key)" />
+              {{ r.label }}
+            </div>
             <!-- The forecasts behind the planned amount: click one to edit it -->
             <div class="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
               <button
@@ -308,6 +316,7 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
         <CollapsibleContent>
           <ul class="flex flex-col gap-2 pt-2 pl-6">
             <li v-for="r in detail.unplanned" :key="r.key" class="flex items-center gap-2 text-sm">
+              <CategoryDot :color="categoryColors.get(r.key)" />
               <span>{{ r.label }}</span>
               <span class="ml-auto tabular-nums">{{ formatCents(r.actualCents) }}</span>
             </li>

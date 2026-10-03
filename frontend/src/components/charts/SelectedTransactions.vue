@@ -5,25 +5,20 @@ import type { Transaction } from '@/types';
 import { computed } from 'vue';
 import { X } from '@lucide/vue';
 import { formatCents, formatDate } from '@/api';
+import { useFinanceData } from '@/composables/useFinanceData';
+import CategoryDot from '../CategoryDot.vue';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const props = defineProps<{ selection: ChartSelection | null; transactions: Transaction[] }>();
 const emit = defineEmits<{ close: [] }>();
 
+const { categoryColors } = useFinanceData();
+
 const total = computed(() => props.transactions.reduce((sum, t) => sum - t.amountCents, 0));
 // "Autres" and groups span several categories: show which one each row is in
-const showCategory = computed(
-  () => new Set(props.transactions.map((t) => t.category?._id ?? null)).size > 1,
-);
+const showCategory = computed(() => new Set(props.transactions.map((t) => t.category?._id ?? null)).size > 1);
 </script>
 
 <template>
@@ -55,7 +50,12 @@ const showCategory = computed(
                 <TableCell class="whitespace-nowrap">{{ formatDate(t.date) }}</TableCell>
                 <TableCell class="whitespace-normal">{{ t.description }}</TableCell>
                 <TableCell>{{ t.account?.name }}</TableCell>
-                <TableCell v-if="showCategory">{{ t.category?.name ?? 'Sans catégorie' }}</TableCell>
+                <TableCell v-if="showCategory">
+                  <span class="flex items-center gap-2">
+                    <CategoryDot :color="t.category && categoryColors.get(t.category._id)" />
+                    {{ t.category?.name ?? 'Sans catégorie' }}
+                  </span>
+                </TableCell>
                 <TableCell class="text-right tabular-nums text-destructive">
                   {{ formatCents(t.amountCents) }}
                 </TableCell>

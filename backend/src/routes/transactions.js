@@ -137,7 +137,7 @@ router.get('/', async (req, res) => {
     Transaction.find(filter)
       .sort({ date: -1, _id: -1 })
       .populate('account', 'name logoUpdatedAt')
-      .populate('category', 'name kind')
+      .populate('category', 'name kind color')
       .populate('transferAccount', 'name');
 
   if (req.query.page === undefined) return res.json(await query());

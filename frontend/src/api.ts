@@ -58,14 +58,26 @@ export const api = {
     }),
   deleteAccountLogo: (id: string) => request<Account>(`/accounts/${id}/logo`, { method: 'DELETE' }),
   getCategories: () => request<Category[]>('/categories'),
-  createCategory: (body: { name: string; kind: CategoryKind; group?: string | null }) =>
-    request<Category>('/categories', { method: 'POST', body }),
-  updateCategory: (id: string, body: Partial<Pick<Category, 'name' | 'kind' | 'group'>>) =>
-    request<Category>(`/categories/${id}`, { method: 'PUT', body }),
+  // Without a color, the backend draws one
+  createCategory: (body: {
+    name: string;
+    kind: CategoryKind;
+    group?: string | null;
+    color?: string | null;
+    shade?: number | null;
+  }) => request<Category>('/categories', { method: 'POST', body }),
+  // { color: null } draws a new color
+  updateCategory: (
+    id: string,
+    body: Partial<Pick<Category, 'name' | 'kind' | 'group' | 'shade' | 'archived'> & { color: string | null }>,
+  ) => request<Category>(`/categories/${id}`, { method: 'PUT', body }),
   deleteCategory: (id: string) => request<null>(`/categories/${id}`, { method: 'DELETE' }),
   getCategoryGroups: () => request<CategoryGroup[]>('/category-groups'),
-  createCategoryGroup: (body: { name: string }) => request<CategoryGroup>('/category-groups', { method: 'POST', body }),
-  updateCategoryGroup: (id: string, body: { name: string }) =>
+  // Without a color, the backend draws one
+  createCategoryGroup: (body: { name: string; color?: string | null }) =>
+    request<CategoryGroup>('/category-groups', { method: 'POST', body }),
+  // { color: null } draws a new color
+  updateCategoryGroup: (id: string, body: { name?: string; color?: string | null }) =>
     request<CategoryGroup>(`/category-groups/${id}`, { method: 'PUT', body }),
   deleteCategoryGroup: (id: string) => request<null>(`/category-groups/${id}`, { method: 'DELETE' }),
   // Every transaction (charts, analysis)

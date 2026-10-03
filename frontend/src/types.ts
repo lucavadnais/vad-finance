@@ -20,6 +20,8 @@ export type AccountInput = Pick<Account, 'name' | 'type' | 'initialBalanceCents'
 export interface CategoryGroup {
   _id: string;
   name: string;
+  // '#rrggbb': its categories are shown in shades of it (see lib/colors.ts)
+  color: string;
 }
 
 export interface Category {
@@ -27,6 +29,13 @@ export interface Category {
   name: string;
   kind: CategoryKind;
   group: string | null;
+  // '#rrggbb', shown while the category has no group; in a group it takes a
+  // shade of the group's color. Use categoryColors() for the displayed one.
+  color: string;
+  // In a group: the shade picked, 0 (darkest) to 8 (lightest); null = automatic
+  shade: number | null;
+  // Kept on its past transactions, no longer offered as a choice
+  archived: boolean;
 }
 
 // GET /transactions populates account and category

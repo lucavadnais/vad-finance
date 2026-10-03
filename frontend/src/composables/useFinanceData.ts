@@ -8,8 +8,9 @@ import type {
   Transaction,
   TransferCandidate,
 } from '@/types';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { api } from '@/api';
+import { categoryColors as colorsOf } from '@/lib/colors';
 
 const accounts = ref<Account[]>([]);
 const categories = ref<Category[]>([]);
@@ -22,6 +23,8 @@ const projections = ref<Projection[]>([]);
 const transferCandidates = ref<TransferCandidate[]>([]);
 const duplicatePairs = ref<DuplicatePair[]>([]);
 const error = ref('');
+// Displayed color of each category, by id (group shade or own color)
+const categoryColors = computed(() => colorsOf(categories.value, categoryGroups.value));
 
 async function refresh() {
   try {
@@ -57,6 +60,7 @@ export function useFinanceData() {
     accounts,
     categories,
     categoryGroups,
+    categoryColors,
     transactions,
     dataVersion,
     transferCandidates,

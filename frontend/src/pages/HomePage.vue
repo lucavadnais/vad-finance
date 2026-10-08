@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Month } from '@/lib/projections';
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
-import { Pencil } from '@lucide/vue';
+import { Eye, EyeOff, Pencil } from '@lucide/vue';
 import { formatCents } from '@/api';
+import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { duplicateKey, useDuplicateReview } from '@/composables/useDuplicateReview';
 import { useTransferReview } from '@/composables/useTransferReview';
@@ -58,6 +59,9 @@ watch(duplicateReview.open, (open) => {
   pendingTransfers = [];
 });
 
+// The eye next to the total hides every amount in the app
+const { amountsHidden, toggle: toggleAmounts } = useAmountsHidden();
+
 const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
 
 // Month shown by the budget card (its forecasts chart picks it too)
@@ -76,7 +80,20 @@ const projectionMonth = ref<Month>(currentMonth());
            number, above the budget's net, on the night surface -->
       <Card class="surface-night">
         <CardHeader>
-          <CardDescription>Total des comptes</CardDescription>
+          <CardDescription class="flex items-center gap-1">
+            Total des comptes
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              :aria-label="amountsHidden ? 'Afficher les montants' : 'Masquer les montants'"
+              :title="amountsHidden ? 'Afficher les montants' : 'Masquer les montants'"
+              :aria-pressed="amountsHidden"
+              @click="toggleAmounts"
+            >
+              <EyeOff v-if="amountsHidden" />
+              <Eye v-else />
+            </Button>
+          </CardDescription>
           <CardTitle class="text-4xl font-semibold tabular-nums" :class="totalCents < 0 && 'text-destructive'">
             {{ formatCents(totalCents) }}
           </CardTitle>

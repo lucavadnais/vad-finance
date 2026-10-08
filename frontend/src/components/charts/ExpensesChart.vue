@@ -6,7 +6,7 @@ import type { Transaction } from '@/types';
 import { computed, ref } from 'vue';
 import { StackedBar } from '@unovis/ts';
 import { VisAxis, VisStackedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
-import { formatCentsCompact } from '@/api';
+import { amountTickFormat } from '@/api';
 import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -118,7 +118,7 @@ const barEvents = {
                 />
                 <VisAxis
                   type="y"
-                  :tick-format="(v: number) => formatCentsCompact(v)"
+                  :tick-format="amountTickFormat"
                   :num-ticks="4"
                   :grid-line="true"
                   :domain-line="false"

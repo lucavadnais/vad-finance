@@ -5,7 +5,7 @@ import type { Row, Series } from '@/lib/chartData';
 import { computed, ref } from 'vue';
 import { CurveType } from '@unovis/ts';
 import { VisArea, VisAxis, VisCrosshair, VisLine, VisTooltip, VisXYContainer } from '@unovis/vue';
-import { formatCentsCompact } from '@/api';
+import { amountTickFormat } from '@/api';
 import { TOTAL_SERIES } from '@/lib/chartData';
 import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
@@ -76,7 +76,7 @@ const template = tooltipTemplate(() => config.value, { dateLabel: true, showTota
                 <VisAxis type="x" :tick-format="formatDay" :num-ticks="6" :grid-line="false" :tick-line="false" />
                 <VisAxis
                   type="y"
-                  :tick-format="(v: number) => formatCentsCompact(v)"
+                  :tick-format="amountTickFormat"
                   :num-ticks="4"
                   :domain-line="false"
                   :tick-line="false"

@@ -9,7 +9,7 @@ import type { CategoryKind, Category, Projection, Transaction } from '@/types';
 import { computed, ref } from 'vue';
 import { GroupedBar } from '@unovis/ts';
 import { VisAxis, VisGroupedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
-import { formatCentsCompact } from '@/api';
+import { amountTickFormat } from '@/api';
 import { budget } from '@/lib/budget';
 import { addMonths, currentMonth, monthLabel } from '@/lib/projections';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
@@ -122,7 +122,7 @@ const calendarMax = addMonths(now, 120);
           />
           <VisAxis
             type="y"
-            :tick-format="(v: number) => formatCentsCompact(v)"
+            :tick-format="amountTickFormat"
             :num-ticks="4"
             :grid-line="true"
             :domain-line="false"

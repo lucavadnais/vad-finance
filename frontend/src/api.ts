@@ -18,6 +18,8 @@ import type {
   TransferCandidate,
   TransferInput,
 } from './types';
+import { computed } from 'vue';
+import { amountsHidden } from './composables/useAmountsHidden';
 
 interface RequestOptions {
   method?: string;
@@ -128,12 +130,19 @@ export function accountLogoUrl(account: Pick<Account, '_id' | 'logoUpdatedAt'>) 
     : null;
 }
 
+// Shown instead of an amount while amounts are hidden (useAmountsHidden).
+// Reading the flag here makes every template using these re-render on toggle.
+const MASK = '•••• $';
+const MASK_COMPACT = '•• $';
+
 export function formatCents(cents: number, currency = 'CAD') {
+  if (amountsHidden.value) return MASK;
   return new Intl.NumberFormat('fr-CA', { style: 'currency', currency }).format(cents / 100);
 }
 
 // "1,2 k$" style, for chart axes
 export function formatCentsCompact(cents: number, currency = 'CAD') {
+  if (amountsHidden.value) return MASK_COMPACT;
   return new Intl.NumberFormat('fr-CA', {
     style: 'currency',
     currency,
@@ -141,6 +150,14 @@ export function formatCentsCompact(cents: number, currency = 'CAD') {
     maximumFractionDigits: 1,
   }).format(cents / 100);
 }
+
+// Tick format of the charts' amount axes. A new function on each toggle of
+// the hidden amounts: Unovis calls it lazily and only redraws the ticks when
+// its props change.
+export const amountTickFormat = computed(() => {
+  const hidden = amountsHidden.value;
+  return (cents: number) => (hidden ? MASK_COMPACT : formatCentsCompact(cents));
+});
 
 export function toCents(value: string | number) {
   return Math.round(parseFloat(String(value).replace(',', '.')) * 100);

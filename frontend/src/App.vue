@@ -23,9 +23,9 @@ watch(settingsOpen, (open) => {
 </script>
 
 <template>
-  <main class="mx-auto flex max-w-screen-2xl flex-col gap-6 px-4 py-8 md:px-6 xl:px-12 2xl:px-16">
+  <main class="mx-auto flex max-w-screen-2xl flex-col gap-6 px-4 py-4 md:px-6 md:py-8 xl:px-12 2xl:px-16">
     <header class="flex flex-wrap items-center gap-4">
-      <h1 class="mr-auto text-3xl font-semibold">VAD finances</h1>
+      <h1 class="mr-auto text-lg font-semibold md:text-3xl">VAD finances</h1>
       <!-- Will become the user menu (Paramètres, Se déconnecter) with accounts -->
       <Button variant="ghost" size="icon" aria-label="Paramètres" title="Paramètres" @click="openSettings()">
         <Settings />

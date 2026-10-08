@@ -9,7 +9,7 @@ import type { Month } from '@/lib/projections';
 import { computed, ref } from 'vue';
 import { Check, ChevronDown, ChevronRight } from '@lucide/vue';
 import { formatCents } from '@/api';
-import { budget, sum } from '@/lib/budget';
+import { budget, budgetSection, sum } from '@/lib/budget';
 import { currentMonth, occurrences, totals } from '@/lib/projections';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,23 +31,6 @@ const emit = defineEmits<{ edit: [projection: Projection] }>();
 const { categoryColors, settings } = useFinanceData();
 const { openSettings } = useSettings();
 
-// Section summary, added up category by category (a net total would let an
-// overrun in one category hide behind a bill not charged yet in another):
-// - leftCents: forecast not reached yet (still to spend, or to receive)
-// - lateCents: part of it already due by today (shown for income: not received)
-// - extraCents: above the forecasts, plus everything with no forecast
-function summarize(compared: BudgetRow[], unplannedCents: number) {
-  let leftCents = 0;
-  let lateCents = 0;
-  let extraCents = unplannedCents;
-  for (const r of compared) {
-    leftCents += Math.max(0, r.plannedCents - r.actualCents);
-    lateCents += Math.max(0, r.dueCents - r.actualCents);
-    extraCents += Math.max(0, r.actualCents - r.plannedCents);
-  }
-  return { leftCents, lateCents, extraCents };
-}
-
 const data = computed(() => budget(props.projections, props.transactions, props.categories, props.month));
 const sections = computed(() =>
   (
@@ -57,30 +40,8 @@ const sections = computed(() =>
     ] as const
   )
     .filter((s) => s.rows.length > 0)
-    .map((s) => {
-      // Compared rows, then the categories with no forecast (folded), then the
-      // forecasts with no category (nothing to compare them with)
-      const compared = s.rows.filter((r) => !r.uncategorized && r.plannedCents > 0);
-      const unplanned = s.rows.filter((r) => !r.uncategorized && r.plannedCents === 0);
-      const uncategorized = s.rows.filter((r) => r.uncategorized);
-      const unplannedCents = sum(unplanned).actualCents;
-      const summary = summarize(compared, unplannedCents);
-      // Spending: the monthly buffer is planned too, and absorbs what goes over
-      // the forecasts (or has none) before it counts as an overrun
-      const bufferCents = s.kind === 'expense' ? settings.value.budgetBufferCents : 0;
-      const bufferUsedCents = Math.min(summary.extraCents, bufferCents);
-      const total = sum(s.rows);
-      return {
-        ...s,
-        compared,
-        unplanned,
-        uncategorized,
-        unplannedCents,
-        // Every forecast counts in the planned total, like in the net
-        total: { ...total, plannedCents: total.plannedCents + bufferCents },
-        summary: { ...summary, bufferCents, bufferUsedCents, overrunCents: summary.extraCents - bufferUsedCents },
-      };
-    }),
+    // Spending: the monthly buffer is planned too (see lib/budget.ts)
+    .map((s) => ({ ...s, ...budgetSection(s.rows, s.kind === 'expense' ? settings.value.budgetBufferCents : 0) })),
 );
 // Net over the whole month: what already came in and went out, plus the
 // forecasts not reached yet (to receive, minus to spend, minus what is left of
@@ -183,10 +144,11 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
 
 <template>
   <div class="@container flex flex-col gap-4">
-    <!-- Net, income and spending, next to each other when the card is wide enough.
+    <!-- Net, income and spending, next to each other when the card is wide enough;
+         narrower (phone), the net on its own line and the other two side by side.
          Income and spending open their detail by category below. -->
-    <div class="grid gap-4 @xl:grid-cols-3">
-      <div class="flex flex-col gap-2 rounded-lg border p-4">
+    <div class="grid grid-cols-2 gap-3 @xl:grid-cols-3 @xl:gap-4">
+      <div class="col-span-2 flex flex-col gap-2 rounded-lg border p-4 @xl:col-span-1">
         <h3 class="text-sm text-muted-foreground">{{ isPast ? 'Net' : 'Net estimé du mois' }}</h3>
         <!-- The estimate in big, the forecast below. No gap: it is the income
              tile's "En plus" minus the spending tile's "Dépassements" -->
@@ -204,7 +166,7 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
       <div
         v-for="s in sections"
         :key="s.kind"
-        class="group relative flex flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+        class="group relative flex min-w-0 flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-muted/50 has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
         :class="expanded === s.kind && 'border-primary bg-muted/50'"
       >
         <button
@@ -216,13 +178,16 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
         />
         <span class="flex items-center justify-between text-sm text-muted-foreground">
           {{ s.title }}
-          <span class="flex items-center gap-0.5 text-xs group-hover:text-foreground">
-            {{ expanded === s.kind ? 'Masquer' : 'Détail' }}
+          <!-- On a phone, only the arrow, in a chip that reads as tappable -->
+          <span
+            class="flex items-center gap-0.5 text-xs group-hover:text-foreground max-md:size-7 max-md:justify-center max-md:rounded-md max-md:bg-secondary max-md:text-foreground"
+          >
+            <span class="max-md:sr-only">{{ expanded === s.kind ? 'Masquer' : 'Détail' }}</span>
             <ChevronDown class="size-4 transition-transform" :class="expanded === s.kind && 'rotate-180'" />
           </span>
         </span>
         <span class="flex flex-wrap items-baseline gap-x-2">
-          <span class="text-2xl font-semibold tabular-nums">{{ formatCents(s.total.actualCents) }}</span>
+          <span class="text-xl font-semibold tabular-nums @xl:text-2xl">{{ formatCents(s.total.actualCents) }}</span>
           <span class="text-sm text-muted-foreground tabular-nums">
             sur {{ formatCents(s.total.plannedCents) }} prévus
           </span>
@@ -261,9 +226,10 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
           class="-mx-4 mt-auto -mb-4 flex flex-col gap-1.5 rounded-b-lg border-t bg-muted/60 px-4 py-2 text-xs"
         >
           <template v-if="s.summary.bufferCents > 0">
-            <span class="flex items-center justify-between gap-2 whitespace-nowrap text-muted-foreground">
-              Marge imprévus
-              <span class="tabular-nums">
+            <!-- In a narrow tile (phone), the amounts go under the label -->
+            <span class="flex flex-wrap items-center justify-between gap-x-2 text-muted-foreground @xl:flex-nowrap">
+              <span class="whitespace-nowrap">Marge imprévus</span>
+              <span class="whitespace-nowrap tabular-nums">
                 <span class="text-foreground">{{ formatCents(s.summary.bufferUsedCents) }}</span>
                 / {{ formatCents(s.summary.bufferCents) }}
               </span>

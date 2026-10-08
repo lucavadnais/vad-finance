@@ -2,14 +2,7 @@
 // Table view of a chart: the same numbers without color or hover
 import type { Row, Series } from '@/lib/chartData';
 import { formatCents } from '@/api';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 defineProps<{
   rows: Row[];
@@ -19,8 +12,7 @@ defineProps<{
   showTotal?: boolean;
 }>();
 
-const total = (row: Row, series: Series[]) =>
-  series.reduce((sum, s) => sum + Number(row[s.key] ?? 0), 0);
+const total = (row: Row, series: Series[]) => series.reduce((sum, s) => sum + Number(row[s.key] ?? 0), 0);
 </script>
 
 <template>

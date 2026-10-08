@@ -7,6 +7,8 @@ const settingSchema = new mongoose.Schema(
     // counted in the planned spending, and spending with no forecast or over
     // its category's forecast uses it before counting as an overrun
     budgetBufferCents: { type: Number, min: 0, default: 0, validate: Number.isInteger },
+    // Charts show their axes (amounts on the left, first and last dates below)
+    chartAxes: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

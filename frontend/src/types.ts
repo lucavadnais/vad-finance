@@ -165,4 +165,6 @@ export interface ImportSummary {
 export interface Settings {
   // Kept aside each month for unplanned spending, see BudgetSummary
   budgetBufferCents: number;
+  // Charts show their axes (TrendChart)
+  chartAxes: boolean;
 }

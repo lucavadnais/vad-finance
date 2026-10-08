@@ -4,6 +4,7 @@ import type { ChartConfig } from '@/components/ui/chart';
 import type { ChartSelection, Row, Series } from '@/lib/chartData';
 import type { Transaction } from '@/types';
 import { computed, ref } from 'vue';
+import { ChartColumn, ChartPie, Table2 } from '@lucide/vue';
 import { StackedBar } from '@unovis/ts';
 import { VisAxis, VisStackedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
 import { amountTickFormat } from '@/api';
@@ -29,7 +30,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [selection: ChartSelection | null] }>();
 
-const view = ref<'chart' | 'share' | 'table'>('chart');
+// The share of each category first: the most telling view of a period
+const view = ref<'chart' | 'share' | 'table'>('share');
 
 const config = computed<ChartConfig>(() =>
   Object.fromEntries(props.series.map((s) => [s.key, { label: s.label, color: s.color }])),
@@ -73,25 +75,47 @@ const barEvents = {
 
 <template>
   <!-- Rendered inside the analysis card (DashboardCharts) -->
-  <section>
+  <!-- Phone: flat, under a line (the card is flat there too) -->
+  <section class="max-md:border-t max-md:pt-6">
     <Tabs v-model="view" class="gap-6">
-      <CardHeader>
+      <CardHeader class="max-md:px-0">
         <div>
           <CardTitle>{{ title }}</CardTitle>
-          <CardDescription>{{ description }}</CardDescription>
+          <!-- The parent's description is about the bars and the table (by week,
+               month...); the donut is the whole period -->
+          <CardDescription>
+            {{ view === 'share' ? 'Part de chaque catégorie dans les dépenses de la période.' : description }}
+          </CardDescription>
+          <!-- Options from the parent for every view (the grouping) -->
+          <div v-if="$slots.filters" class="mt-3"><slot name="filters" /></div>
         </div>
-        <CardAction class="flex flex-wrap justify-end gap-2">
+        <!-- Under the title on a phone: the week / month choice at the start of the
+             line, the views at the end -->
+        <CardAction
+          stack
+          class="flex flex-wrap gap-2 @md/card-header:justify-end @max-md/card-header:w-full @max-md/card-header:justify-between"
+        >
           <!-- Extra controls from the parent (the week / month choice): they
                shape the bars and the table, not the share of the period -->
           <slot v-if="view !== 'share'" name="actions" />
-          <TabsList>
-            <TabsTrigger value="chart">Graphique</TabsTrigger>
-            <TabsTrigger value="share">Répartition</TabsTrigger>
-            <TabsTrigger value="table">Tableau</TabsTrigger>
+          <!-- Icons only on a phone, so the controls fit on one line -->
+          <TabsList class="ml-auto">
+            <TabsTrigger value="share" aria-label="Répartition" title="Répartition">
+              <ChartPie class="md:hidden" />
+              <span class="max-md:sr-only">Répartition</span>
+            </TabsTrigger>
+            <TabsTrigger value="chart" aria-label="Graphique" title="Graphique">
+              <ChartColumn class="md:hidden" />
+              <span class="max-md:sr-only">Graphique</span>
+            </TabsTrigger>
+            <TabsTrigger value="table" aria-label="Tableau" title="Tableau">
+              <Table2 class="md:hidden" />
+              <span class="max-md:sr-only">Tableau</span>
+            </TabsTrigger>
           </TabsList>
         </CardAction>
       </CardHeader>
-      <CardContent>
+      <CardContent class="max-md:px-0">
         <p v-if="rows.length === 0" class="py-12 text-center text-sm text-muted-foreground">
           Aucune dépense sur cette période.
         </p>

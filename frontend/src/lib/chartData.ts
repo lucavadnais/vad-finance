@@ -177,6 +177,30 @@ export interface ChartSelection {
   bucket?: number;
 }
 
+// The expenses behind a clicked bar segment or donut slice, newest first: of
+// its series (`keyOf`), since `from`, and in its bar when it has one
+// (`inBucket`, for the bars' week or month)
+export function selectedExpenses(
+  transactions: Transaction[],
+  selection: ChartSelection | null,
+  keyOf: (t: Transaction) => string,
+  from: Date | null,
+  inBucket?: (t: Transaction, bucket: number) => boolean,
+): Transaction[] {
+  if (!selection) return [];
+  const keys = new Set(selection.keys);
+  const bucket = selection.bucket;
+  return transactions
+    .filter(
+      (t) =>
+        isExpense(t) &&
+        (!from || new Date(t.date) >= from) &&
+        keys.has(keyOf(t)) &&
+        (bucket === undefined || !inBucket || inBucket(t, bucket)),
+    )
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+}
+
 const BUCKETS = { day: dayBucket, week: weekBucket, month: monthBucket };
 
 // Start (UTC ms) of the day, week or month a date falls in: the `t` of its row

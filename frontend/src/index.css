@@ -5,10 +5,12 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Design system: night, its lighter surface, and a cool gray */
+  /* Design system: night, its lighter surface, a cool gray, and an indigo
+     accent for what should stand out (the phone home's spending curve) */
   --brand-night: #010318;
   --brand-surface: #1b1d33;
   --brand-gray: #b2b3bd;
+  --brand-accent: #15064c;
 
   --background: #f5f5f8;
   --foreground: var(--brand-night);

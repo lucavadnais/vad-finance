@@ -76,19 +76,22 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
 </script>
 
 <template>
-  <Card>
-    <CardHeader>
+  <!-- Phone: flat on the home page, under a line, and the drop zone becomes a
+       button (no dragging files there) -->
+  <Card
+    class="max-md:gap-4 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-transparent max-md:pt-6 max-md:pb-0 max-md:shadow-none"
+  >
+    <CardHeader class="max-md:px-0">
       <CardTitle>Ajouter des transactions</CardTitle>
-      <CardDescription>
-        Dépose le relevé CSV de ta banque : tu choisiras le compte et vérifieras les transactions
-        avant de les importer.
+      <CardDescription class="max-md:hidden">
+        Dépose le relevé CSV de ta banque : tu choisiras le compte et vérifieras les transactions avant de les importer.
       </CardDescription>
     </CardHeader>
-    <CardContent class="flex flex-col gap-4">
+    <CardContent class="flex flex-col gap-4 max-md:px-0">
       <div
         role="button"
         tabindex="0"
-        class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-10 text-center transition-colors"
+        class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-10 text-center transition-colors max-md:flex-row max-md:justify-center max-md:p-4"
         :class="dragging ? 'border-primary bg-muted' : 'border-border hover:bg-muted/50'"
         @click="input?.click()"
         @keydown.enter.space.prevent="input?.click()"
@@ -96,11 +99,18 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
         @dragleave="dragging = false"
         @drop.prevent="onDrop"
       >
-        <Upload class="size-8 text-muted-foreground" />
+        <Upload class="size-8 text-muted-foreground max-md:size-5" />
         <p class="font-medium">
-          {{ loading ? 'Lecture en cours…' : fileName || 'Glisse ton relevé CSV ici' }}
+          <template v-if="loading">Lecture en cours…</template>
+          <template v-else-if="fileName">{{ fileName }}</template>
+          <template v-else>
+            <span class="md:hidden">Importer un relevé CSV</span>
+            <span class="max-md:hidden">Glisse ton relevé CSV ici</span>
+          </template>
         </p>
-        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground">Banques supportées : CIBC & BNC</p>
+        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground max-md:hidden">
+          Banques supportées : CIBC & BNC
+        </p>
         <input ref="input" type="file" accept=".csv,text/csv" hidden @change="onChange" />
       </div>
 

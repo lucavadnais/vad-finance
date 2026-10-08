@@ -7,6 +7,7 @@ import type { Row, Series } from '@/lib/chartData';
 import type { Month } from '@/lib/projections';
 import type { CategoryKind, Category, Projection, Transaction } from '@/types';
 import { computed, ref } from 'vue';
+import { CalendarDays, ChartColumn, Table2 } from '@lucide/vue';
 import { GroupedBar } from '@unovis/ts';
 import { VisAxis, VisGroupedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
 import { amountTickFormat } from '@/api';
@@ -83,16 +84,27 @@ const calendarMax = addMonths(now, 120);
 <template>
   <Tabs v-model="view" class="gap-3">
     <div class="flex flex-wrap items-center gap-2">
-      <div class="mr-auto">
+      <!-- Phone: the title on its own line, then the side (start) and the views
+           (end, icons only) on one line -->
+      <div class="mr-auto max-md:w-full">
         <h3 class="text-sm font-medium first-letter:uppercase">Prévu vs réalisé · {{ monthLabel(selected) }}</h3>
         <p v-if="view !== 'calendar'" class="text-sm text-muted-foreground">Par catégorie : prévu, puis réalisé.</p>
         <p v-else class="text-sm text-muted-foreground">Clique sur une prévision pour la modifier.</p>
       </div>
       <OptionSelect v-if="view !== 'calendar'" v-model="kind" :options="KINDS" class="w-32" />
-      <TabsList>
-        <TabsTrigger value="chart">Graphique</TabsTrigger>
-        <TabsTrigger value="calendar">Calendrier</TabsTrigger>
-        <TabsTrigger value="table">Tableau</TabsTrigger>
+      <TabsList class="ml-auto">
+        <TabsTrigger value="chart" aria-label="Graphique" title="Graphique">
+          <ChartColumn class="md:hidden" />
+          <span class="max-md:sr-only">Graphique</span>
+        </TabsTrigger>
+        <TabsTrigger value="calendar" aria-label="Calendrier" title="Calendrier">
+          <CalendarDays class="md:hidden" />
+          <span class="max-md:sr-only">Calendrier</span>
+        </TabsTrigger>
+        <TabsTrigger value="table" aria-label="Tableau" title="Tableau">
+          <Table2 class="md:hidden" />
+          <span class="max-md:sr-only">Tableau</span>
+        </TabsTrigger>
       </TabsList>
     </div>
     <TabsContent value="chart">

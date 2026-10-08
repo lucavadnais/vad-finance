@@ -4,6 +4,7 @@
 import type { Transaction } from '@/types';
 import { computed, ref } from 'vue';
 import { ArrowLeft, ArrowRight, Ellipsis, Link2, Pencil, Trash2 } from '@lucide/vue';
+import { createReusableTemplate } from '@vueuse/core';
 import { api, formatCents, formatDate } from '@/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,9 @@ const props = defineProps<{ transaction: Transaction }>();
 const emit = defineEmits<{ edit: []; changed: []; error: [message: string] }>();
 
 const { categoryColors } = useFinanceData();
+// The category badge: in its own column, or under the description when the
+// table is narrow (mobile)
+const [DefineCategory, Category] = createReusableTemplate();
 
 const confirmOpen = ref(false);
 const linked = computed(() => !!props.transaction.transferPeer);
@@ -38,6 +42,13 @@ async function remove() {
 </script>
 
 <template>
+  <DefineCategory>
+      <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
+      <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
+        <CategoryDot :color="categoryColors.get(transaction.category._id)" />
+        <span class="truncate">{{ transaction.category.name }}</span>
+      </Badge>
+  </DefineCategory>
   <TableRow>
     <TableCell class="w-px pr-0">
       <span v-if="transaction.account" class="flex" :title="transaction.account.name">
@@ -57,13 +68,10 @@ async function remove() {
         {{ transaction.amountCents < 0 ? 'Vers' : 'De' }} {{ transaction.transferAccount.name }}
         <Link2 v-if="linked" class="size-3.5 shrink-0" />
       </div>
+      <div class="mt-1 @md:hidden"><Category /></div>
     </TableCell>
-    <TableCell>
-      <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
-      <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
-        <CategoryDot :color="categoryColors.get(transaction.category._id)" />
-        <span class="truncate">{{ transaction.category.name }}</span>
-      </Badge>
+    <TableCell class="hidden @md:table-cell">
+      <Category />
     </TableCell>
     <TableCell
       class="text-right tabular-nums"

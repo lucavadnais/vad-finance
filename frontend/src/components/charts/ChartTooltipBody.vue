@@ -21,7 +21,12 @@ const props = withDefaults(
 
 const rows = computed(() =>
   Object.entries(props.config)
-    .map(([key, item]) => ({ key, label: item.label as string, color: item.color, value: Number(props.payload[key] ?? 0) }))
+    .map(([key, item]) => ({
+      key,
+      label: item.label as string,
+      color: item.color,
+      value: Number(props.payload[key] ?? 0),
+    }))
     .filter((r) => !props.hideZero || r.value !== 0),
 );
 

@@ -109,3 +109,44 @@ export function sum(rows: BudgetRow[]) {
   }
   return { plannedCents, dueCents, actualCents };
 }
+
+// Section summary, added up category by category (a net total would let an
+// overrun in one category hide behind a bill not charged yet in another):
+// - leftCents: forecast not reached yet (still to spend, or to receive)
+// - lateCents: part of it already due by today (shown for income: not received)
+// - extraCents: above the forecasts, plus everything with no forecast
+function summarize(compared: BudgetRow[], unplannedCents: number) {
+  let leftCents = 0;
+  let lateCents = 0;
+  let extraCents = unplannedCents;
+  for (const r of compared) {
+    leftCents += Math.max(0, r.plannedCents - r.actualCents);
+    lateCents += Math.max(0, r.dueCents - r.actualCents);
+    extraCents += Math.max(0, r.actualCents - r.plannedCents);
+  }
+  return { leftCents, lateCents, extraCents };
+}
+
+// One side of the budget (income or spending) summed up the way the budget
+// card shows it: compared rows, then the categories with no forecast (folded),
+// then the forecasts with no category (nothing to compare them with). For
+// spending, the monthly buffer is planned too, and absorbs what goes over the
+// forecasts (or has none) before it counts as an overrun.
+export function budgetSection(rows: BudgetRow[], bufferCents = 0) {
+  const compared = rows.filter((r) => !r.uncategorized && r.plannedCents > 0);
+  const unplanned = rows.filter((r) => !r.uncategorized && r.plannedCents === 0);
+  const uncategorized = rows.filter((r) => r.uncategorized);
+  const unplannedCents = sum(unplanned).actualCents;
+  const summary = summarize(compared, unplannedCents);
+  const bufferUsedCents = Math.min(summary.extraCents, bufferCents);
+  const total = sum(rows);
+  return {
+    compared,
+    unplanned,
+    uncategorized,
+    unplannedCents,
+    // Every forecast counts in the planned total, like in the net
+    total: { ...total, plannedCents: total.plannedCents + bufferCents },
+    summary: { ...summary, bufferCents, bufferUsedCents, overrunCents: summary.extraCents - bufferUsedCents },
+  };
+}

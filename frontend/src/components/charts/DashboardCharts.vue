@@ -1,31 +1,27 @@
 <script setup lang="ts">
-// The three dashboard charts, all scoped by the period filter above them. The
-// "Mois par mois" period shows one month at a time, stepped with arrows.
+// The analysis: trends over several months (the month itself is the spending
+// tab's), all scoped by the period filter above them.
 import type { Account, Category, CategoryGroup, Transaction } from '@/types';
 import type { ChartSelection, Granularity, Period, Row } from '@/lib/chartData';
-import type { Month } from '@/lib/projections';
 import { computed, ref, watch } from 'vue';
-import { ChevronLeft, ChevronRight, RotateCcw } from '@lucide/vue';
 import {
   PERIODS,
   accountSeries,
   balanceOverTime,
   bucketStart,
   expenseSeries,
-  expensesByDay,
   expensesByMonth,
   expensesByWeek,
-  isExpense,
   periodStart,
+  selectedExpenses,
 } from '@/lib/chartData';
-import { addMonths, currentMonth, monthLabel, sameMonth } from '@/lib/projections';
 import { useFinanceData } from '@/composables/useFinanceData';
-import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import OptionSelect from '../OptionSelect.vue';
+import PageBar from '../PageBar.vue';
 import BalanceChart from './BalanceChart.vue';
 import ExpensesChart from './ExpensesChart.vue';
 
@@ -36,124 +32,75 @@ const props = defineProps<{
   groups: CategoryGroup[];
 }>();
 
-const period = ref<Period>('month');
-// Month shown by the "Mois par mois" period, up to the current one
-const month = ref<Month>(currentMonth());
-const isCurrentMonth = computed(() => sameMonth(month.value, currentMonth()));
-const monthStart = (m: Month) => new Date(Date.UTC(m.year, m.month, 1));
-
-const from = computed(() => (period.value === 'month' ? monthStart(month.value) : periodStart(period.value)));
-// A past month ends on its last day: later transactions are left out, and the
-// charts stop there instead of today
-const end = computed(() =>
-  period.value === 'month' && !isCurrentMonth.value ? monthStart(addMonths(month.value, 1)) : null,
-);
-const transactions = computed(() =>
-  end.value ? props.transactions.filter((t) => new Date(t.date) < end.value!) : props.transactions,
-);
-const now = computed(() => (end.value ? new Date(end.value.getTime() - 1) : new Date()));
+// Several months: this week and one month at a time are the spending tab's
+type TrendPeriod = Exclude<Period, 'week' | 'month'>;
+const TREND_PERIODS: Record<TrendPeriod, string> = {
+  '3m': PERIODS['3m'],
+  '6m': PERIODS['6m'],
+  '12m': PERIODS['12m'],
+  year: PERIODS.year,
+  all: PERIODS.all,
+};
+const period = ref<TrendPeriod>('3m');
+const from = computed(() => periodStart(period.value));
 
 // Count grouped categories under their group (e.g. "Milieu de vie")
 const { categoryColors } = useFinanceData();
 const grouped = ref(false);
 const expenses = computed(() =>
-  expenseSeries(transactions.value, props.categories, props.groups, categoryColors.value, grouped.value, from.value),
+  expenseSeries(props.transactions, props.categories, props.groups, categoryColors.value, grouped.value, from.value),
 );
-// Spending bucketed by week (Monday to Sunday) or month, as picked. This week
-// is by day instead: the "Jour" option then shows up, active, and week and
-// month are greyed out. A single month is by week (one bar for the month says
-// nothing): month is greyed out.
-const picked = ref<Exclude<Granularity, 'day'>>('week');
-const byDay = computed(() => period.value === 'week');
-const oneMonth = computed(() => period.value === 'month');
-const granularity = computed<Granularity>({
-  get: () => (byDay.value ? 'day' : oneMonth.value ? 'week' : picked.value),
-  set: (g) => {
-    if (g !== 'day') picked.value = g;
-  },
-});
-const BY = { day: expensesByDay, week: expensesByWeek, month: expensesByMonth };
-const expenseRows = computed(() => BY[granularity.value](transactions.value, expenses.value, from.value, now.value));
+// Spending bucketed by week (Monday to Sunday) or month, as picked
+const granularity = ref<Exclude<Granularity, 'day'>>('week');
+const BY = { week: expensesByWeek, month: expensesByMonth };
+const expenseRows = computed(() => BY[granularity.value](props.transactions, expenses.value, from.value));
 
-const DESCRIPTIONS: Record<Granularity, string> = {
-  day: 'Dépenses de chaque jour, par catégorie.',
+const DESCRIPTIONS = {
   week: 'Dépenses de chaque semaine (du lundi au dimanche), par catégorie.',
   month: 'Dépenses de chaque mois, par catégorie.',
 };
-const BUCKET_LABELS: Record<Granularity, string> = { day: 'Jour', week: 'Semaine', month: 'Mois' };
+const BUCKET_LABELS = { week: 'Semaine', month: 'Mois' };
 
 // Clicked bar segment or donut slice, and the expenses behind it
 const selection = ref<ChartSelection | null>(null);
-watch([period, month, granularity, grouped], () => (selection.value = null));
-
-const selectedTransactions = computed(() => {
-  const sel = selection.value;
-  if (!sel) return [];
-  const keys = new Set(sel.keys);
-  return transactions.value
-    .filter(
-      (t) =>
-        isExpense(t) &&
-        (!from.value || new Date(t.date) >= from.value) &&
-        keys.has(expenses.value.keyOf(t)) &&
-        (sel.bucket === undefined || bucketStart(t.date, granularity.value) === sel.bucket),
-    )
-    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
-});
+watch([period, granularity, grouped], () => (selection.value = null));
+const selectedTransactions = computed(() =>
+  selectedExpenses(
+    props.transactions,
+    selection.value,
+    expenses.value.keyOf,
+    from.value,
+    (t, bucket) => bucketStart(t.date, granularity.value) === bucket,
+  ),
+);
 
 const formatWeekTick = (row: Row) =>
   new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', day: 'numeric', month: 'short' });
-// "lun. 28"
-const formatDayTick = (row: Row) =>
-  new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', weekday: 'short', day: 'numeric' });
-const TICKS: Partial<Record<Granularity, (row: Row) => string>> = { day: formatDayTick, week: formatWeekTick };
+const TICKS: Partial<Record<Granularity, (row: Row) => string>> = { week: formatWeekTick };
 
-const perAccount = computed(() => accountSeries(props.accounts));
+// The total balance after each day (all accounts summed)
 const balance = computed(() =>
-  balanceOverTime(transactions.value, props.accounts, perAccount.value, from.value, now.value),
+  balanceOverTime(props.transactions, props.accounts, accountSeries(props.accounts), from.value),
 );
 </script>
 
 <template>
-  <Card>
-    <CardHeader>
-      <!-- The period and the month's arrows next to the title, like the budget card -->
-      <CardTitle class="flex min-h-8 flex-wrap items-center gap-1 text-xl">
-        Analyse
-        <OptionSelect v-model="period" :options="PERIODS" class="ml-2 w-44 text-sm font-normal" />
-        <span v-if="period === 'month'" class="ml-2 flex items-center gap-1 text-sm font-medium">
-          <Button size="icon-sm" variant="ghost" aria-label="Mois précédent" @click="month = addMonths(month, -1)">
-            <ChevronLeft />
-          </Button>
-          <span class="min-w-28 text-center first-letter:uppercase">{{ monthLabel(month) }}</span>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Mois suivant"
-            :disabled="isCurrentMonth"
-            @click="month = addMonths(month, 1)"
-          >
-            <ChevronRight />
-          </Button>
-          <Button
-            v-if="!isCurrentMonth"
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Revenir au mois courant"
-            title="Revenir au mois courant"
-            @click="month = currentMonth()"
-          >
-            <RotateCcw />
-          </Button>
-        </span>
-      </CardTitle>
-      <CardAction class="flex flex-wrap items-center justify-end gap-3">
-        <div v-if="groups.length > 0" class="flex items-center gap-2">
-          <Switch id="group-categories" v-model="grouped" />
-          <Label for="group-categories" class="font-normal">Regrouper par groupe</Label>
+  <!-- A card on a computer; flat in its tab on a phone, like the spending tab -->
+  <Card class="max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:py-0 max-md:shadow-none">
+    <!-- Phone: no title, the tab bar names it; the period is in the bar below -->
+    <CardHeader class="max-md:hidden">
+      <!-- The period next to the title on a computer -->
+      <div class="col-start-1 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <CardTitle class="flex min-h-8 items-center text-xl">Analyse</CardTitle>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 max-md:hidden">
+          <OptionSelect v-model="period" :options="TREND_PERIODS" class="w-44" />
         </div>
-      </CardAction>
+      </div>
     </CardHeader>
+    <!-- Phone: the page's bar, with its period -->
+    <PageBar v-model:period="period" title="Analyse" :periods="TREND_PERIODS" class="md:hidden" />
+    <!-- The balance first, then the spending -->
+    <BalanceChart :rows="balance" />
     <ExpensesChart
       title="Dépenses"
       :description="DESCRIPTIONS[granularity]"
@@ -165,16 +112,21 @@ const balance = computed(() =>
       :selected-transactions="selectedTransactions"
       @select="selection = $event"
     >
+      <!-- The grouping: for the spending only, so in its section -->
+      <template v-if="groups.length > 0" #filters>
+        <div class="flex items-center gap-2">
+          <Switch id="group-categories" v-model="grouped" />
+          <Label for="group-categories" class="font-normal">Regrouper par groupe</Label>
+        </div>
+      </template>
       <template #actions>
         <Tabs v-model="granularity">
           <TabsList>
-            <TabsTrigger v-if="byDay" value="day">Jour</TabsTrigger>
-            <TabsTrigger value="week" :disabled="byDay">Semaine</TabsTrigger>
-            <TabsTrigger value="month" :disabled="byDay || oneMonth">Mois</TabsTrigger>
+            <TabsTrigger value="week">Semaine</TabsTrigger>
+            <TabsTrigger value="month">Mois</TabsTrigger>
           </TabsList>
         </Tabs>
       </template>
     </ExpensesChart>
-    <BalanceChart :rows="balance" :account-series="perAccount" />
   </Card>
 </template>

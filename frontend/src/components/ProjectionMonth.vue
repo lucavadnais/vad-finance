@@ -1,18 +1,20 @@
 <script setup lang="ts">
-// Budget of a month: net, income and spending against the forecasts (with the
-// detail by category), then the forecasts vs actual chart by category. "Gérer les prévisions"
-// lists them all, to edit or delete.
+// Planning of a month: the forecasts vs actual chart by category, and the
+// forecasts themselves ("Gérer les prévisions" lists them all, to edit or
+// delete). The month's figures (net, income, spending) are in the month card
+// (SpendInsights), which shares the month and opens the forecasts through
+// `openDialog`.
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
-import { computed, defineAsyncComponent, ref } from 'vue';
-import { ChevronLeft, ChevronRight, ListChecks, Plus, RotateCcw } from '@lucide/vue';
+import { defineAsyncComponent, ref } from 'vue';
+import { ListChecks, Plus } from '@lucide/vue';
 import { api } from '@/api';
-import { addMonths, currentMonth, monthLabel, sameMonth } from '@/lib/projections';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import BudgetSummary from './BudgetSummary.vue';
 import ProjectionDialog from './ProjectionDialog.vue';
+import ProjectionList from './ProjectionList.vue';
 import ProjectionListDialog from './ProjectionListDialog.vue';
+import PageBar from './PageBar.vue';
 
 // Charts pull in Unovis (~1 MB): load them in their own chunk
 const ProjectionsChart = defineAsyncComponent(() => import('./charts/ProjectionsChart.vue'));
@@ -25,14 +27,8 @@ defineProps<{
 }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
-const now = currentMonth();
-const isCurrent = computed(() => sameMonth(month.value, now));
-
 // Dialog listing them all
 const listOpen = ref(false);
-
-// Side of the budget shown by category (income or spending tile clicked)
-const expanded = ref<'income' | 'expense' | null>(null);
 
 // Dialog adding a projection, or editing `editing`
 const dialogOpen = ref(false);
@@ -42,6 +38,8 @@ function openDialog(p: Projection | null) {
   editing.value = p;
   dialogOpen.value = true;
 }
+
+defineExpose({ openDialog });
 
 async function remove(p: Projection) {
   try {
@@ -54,60 +52,27 @@ async function remove(p: Projection) {
 </script>
 
 <template>
-  <Card>
-    <CardHeader>
-      <CardTitle class="flex min-h-8 flex-wrap items-center gap-1 text-lg">
-        Budget
-        <span class="ml-2 flex items-center gap-1 text-sm font-medium">
-          <Button size="icon-sm" variant="ghost" aria-label="Mois précédent" @click="month = addMonths(month, -1)">
-            <ChevronLeft />
-          </Button>
-          <span class="min-w-28 text-center first-letter:uppercase">{{ monthLabel(month) }}</span>
-          <Button size="icon-sm" variant="ghost" aria-label="Mois suivant" @click="month = addMonths(month, 1)">
-            <ChevronRight />
-          </Button>
-          <Button
-            v-if="!isCurrent"
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Revenir au mois courant"
-            title="Revenir au mois courant"
-            @click="month = now"
-          >
-            <RotateCcw />
-          </Button>
-        </span>
-      </CardTitle>
-      <CardAction class="flex flex-wrap items-center justify-end gap-2">
-        <!-- Icons only on a phone, so the header fits next to the month -->
-        <Button
-          v-if="projections.length > 0"
-          variant="ghost"
-          aria-label="Gérer les prévisions"
-          title="Gérer les prévisions"
-          class="max-sm:size-9"
-          @click="listOpen = true"
-        >
+  <!-- A card on a computer; flat in its tab on a phone, like the others -->
+  <Card class="max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:py-0 max-md:shadow-none">
+    <!-- Computer: the title and the actions. The month is set by the month card
+         above (SpendInsights) -->
+    <CardHeader class="max-md:hidden">
+      <CardTitle class="flex min-h-8 items-center text-lg">Budget</CardTitle>
+      <CardAction class="flex items-center gap-2">
+        <Button v-if="projections.length > 0" variant="ghost" @click="listOpen = true">
           <ListChecks />
-          <span class="max-sm:sr-only">Gérer les prévisions</span>
+          Gérer les prévisions
         </Button>
-        <Button aria-label="Ajouter une prévision" class="max-sm:size-9" @click="openDialog(null)">
+        <Button @click="openDialog(null)">
           <Plus />
-          <span class="max-sm:sr-only">Prévision</span>
+          Prévision
         </Button>
       </CardAction>
     </CardHeader>
-    <CardContent class="flex flex-col gap-4">
-      <BudgetSummary
-        v-model:expanded="expanded"
-        :month="month"
-        :projections="projections"
-        :transactions="transactions"
-        :categories="categories"
-        @edit="openDialog"
-      />
-
-      <!-- The month shown above it, forecasts vs actual by category -->
+    <!-- Phone: the page's bar, with the month (the actions are by the list) -->
+    <PageBar v-model:month="month" title="Budget" class="md:hidden" />
+    <CardContent class="flex flex-col gap-4 max-md:px-0">
+      <!-- Forecasts vs actual by category, for the month shown -->
       <ProjectionsChart
         v-if="projections.length > 0"
         v-model="month"
@@ -116,6 +81,23 @@ async function remove(p: Projection) {
         :categories="categories"
         @edit="openDialog"
       />
+
+      <!-- Phone: the list right under the chart, instead of its dialog, with the
+           button to add one top right -->
+      <section class="flex flex-col gap-3 border-t pt-4 md:hidden">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="text-sm font-medium">Prévisions</h3>
+          <Button
+            size="icon"
+            aria-label="Ajouter une prévision"
+            title="Ajouter une prévision"
+            @click="openDialog(null)"
+          >
+            <Plus />
+          </Button>
+        </div>
+        <ProjectionList :projections="projections" :categories="categories" @edit="openDialog" @remove="remove" />
+      </section>
 
       <ProjectionListDialog
         v-model:open="listOpen"

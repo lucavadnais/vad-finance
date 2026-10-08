@@ -23,7 +23,7 @@ const dataVersion = ref(0);
 const projections = ref<Projection[]>([]);
 const transferCandidates = ref<TransferCandidate[]>([]);
 const duplicatePairs = ref<DuplicatePair[]>([]);
-const settings = ref<Settings>({ budgetBufferCents: 0 });
+const settings = ref<Settings>({ budgetBufferCents: 0, chartAxes: true });
 const error = ref('');
 // Displayed color of each category, by id (group shade or own color)
 const categoryColors = computed(() => colorsOf(categories.value, categoryGroups.value));

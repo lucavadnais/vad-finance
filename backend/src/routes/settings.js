@@ -11,6 +11,7 @@ router.get('/', async (req, res) => {
 router.put('/', async (req, res) => {
   const settings = await getSettings();
   if (req.body.budgetBufferCents !== undefined) settings.budgetBufferCents = req.body.budgetBufferCents;
+  if (req.body.chartAxes !== undefined) settings.chartAxes = req.body.chartAxes;
   await settings.save();
   res.json(settings);
 });

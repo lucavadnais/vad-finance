@@ -119,8 +119,11 @@ const range = computed(() => {
 </script>
 
 <template>
-  <Card>
-    <CardHeader>
+  <!-- Phone: flat on the home page, under a line -->
+  <Card
+    class="max-md:gap-4 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-transparent max-md:pt-6 max-md:pb-0 max-md:shadow-none"
+  >
+    <CardHeader class="max-md:px-0">
       <CardTitle class="flex min-h-8 items-center gap-1">
         Transactions
         <Button
@@ -176,17 +179,17 @@ const range = computed(() => {
     </CardHeader>
     <!-- When the parent caps the card's height, the rows scroll under a sticky
          header and the pagination stays visible -->
-    <CardContent class="@container flex min-h-0 flex-1 flex-col gap-4">
+    <CardContent class="@container flex min-h-0 flex-1 flex-col gap-4 max-md:px-0">
       <div
         class="flex min-h-0 flex-1 flex-col *:data-[slot=table-container]:min-h-0 *:data-[slot=table-container]:flex-1"
       >
         <!-- While the next page loads, the current one stays, dimmed -->
         <Table :class="loading && 'opacity-60 transition-opacity'">
-          <TableHeader class="sticky top-0 z-10 bg-card">
+          <TableHeader class="sticky top-0 z-10 bg-card max-md:bg-background">
             <TableRow>
               <TableHead class="w-px pr-0"><span class="sr-only">Compte</span></TableHead>
               <TableHead>Transaction</TableHead>
-              <TableHead>Catégorie</TableHead>
+              <TableHead class="hidden @md:table-cell">Catégorie</TableHead>
               <TableHead class="text-right">Montant</TableHead>
               <TableHead class="w-px"><span class="sr-only">Actions</span></TableHead>
             </TableRow>

@@ -128,9 +128,10 @@ function askDelete() {
   <Dialog :open="open" @update:open="onOpenChange">
     <DialogTrigger as-child>
       <slot>
-        <Button size="sm">
+        <!-- Icon only on a phone, so it fits next to the total -->
+        <Button size="sm" aria-label="Ajouter un compte" title="Ajouter un compte" class="max-sm:size-8">
           <Plus />
-          Ajouter un compte
+          <span class="max-sm:sr-only">Ajouter un compte</span>
         </Button>
       </slot>
     </DialogTrigger>

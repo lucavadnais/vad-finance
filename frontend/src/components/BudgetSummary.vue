@@ -191,7 +191,7 @@ const progress = (r: BudgetRow) => Math.min(100, (r.actualCents / r.plannedCents
         <!-- The estimate in big, the forecast below. No gap: it is the income
              tile's "En plus" minus the spending tile's "Dépassements" -->
         <div class="flex flex-col gap-1">
-          <span class="text-4xl font-semibold tabular-nums" :class="netClass(net.estimatedCents)">
+          <span class="text-3xl font-semibold tabular-nums" :class="netClass(net.estimatedCents)">
             {{ formatCents(net.estimatedCents) }}
           </span>
           <span class="text-base text-muted-foreground tabular-nums"

@@ -7,7 +7,7 @@ import { useFinanceData } from '@/composables/useFinanceData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { currentMonth } from '@/lib/projections';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
 import CsvImport from '@/components/CsvImport.vue';
@@ -47,8 +47,13 @@ const projectionMonth = ref<Month>(currentMonth());
          what is left (scrolling inside) instead of pushing the page longer -->
     <aside class="contents xl:flex xl:flex-col xl:gap-6 xl:[contain:size]">
       <Card>
+        <!-- The total of the accounts is the page's headline figure: the biggest
+             number, above the budget's net -->
         <CardHeader>
-          <CardTitle>Comptes — total {{ formatCents(totalCents) }}</CardTitle>
+          <CardDescription>Total des comptes</CardDescription>
+          <CardTitle class="text-4xl font-semibold tabular-nums" :class="totalCents < 0 && 'text-destructive'">
+            {{ formatCents(totalCents) }}
+          </CardTitle>
           <CardAction>
             <AccountForm @created="refresh" @error="setError" />
           </CardAction>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Budget of a month: net, income and spending against the forecasts (with the
-// detail by category), then the next 12 months chart. "Gérer les prévisions"
+// detail by category), then the forecasts vs actual chart by category. "Gérer les prévisions"
 // lists them all, to edit or delete.
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
@@ -107,11 +107,12 @@ async function remove(p: Projection) {
         @edit="openDialog"
       />
 
-      <!-- Picks the month shown above it -->
+      <!-- The month shown above it, forecasts vs actual by category -->
       <ProjectionsChart
         v-if="projections.length > 0"
         v-model="month"
         :projections="projections"
+        :transactions="transactions"
         :categories="categories"
         @edit="openDialog"
       />

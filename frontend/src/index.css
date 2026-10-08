@@ -5,38 +5,44 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Design system: night, its lighter surface, and a cool gray */
+  --brand-night: #010318;
+  --brand-surface: #1b1d33;
+  --brand-gray: #b2b3bd;
+
+  --background: #f5f5f8;
+  --foreground: var(--brand-night);
+  --card: #ffffff;
+  --card-foreground: var(--brand-night);
+  --popover: #ffffff;
+  --popover-foreground: var(--brand-night);
+  --primary: var(--brand-night);
+  --primary-foreground: #ffffff;
+  --secondary: #ebebf0;
+  --secondary-foreground: var(--brand-surface);
+  --muted: #ebebf0;
+  /* The gray darkened enough to read on white */
+  --muted-foreground: #5d5f72;
+  --accent: #ebebf0;
+  --accent-foreground: var(--brand-surface);
+  --destructive: oklch(0.52 0.2 26);
+  --border: #e0e1e7;
+  --input: #d0d1d9;
+  --ring: var(--brand-gray);
+  --chart-1: var(--brand-gray);
+  --chart-2: #8a8b9a;
+  --chart-3: #5d5f72;
+  --chart-4: var(--brand-surface);
+  --chart-5: var(--brand-night);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--brand-night);
+  --sidebar-primary: var(--brand-night);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ebebf0;
+  --sidebar-accent-foreground: var(--brand-surface);
+  --sidebar-border: #e0e1e7;
+  --sidebar-ring: var(--brand-gray);
 }
 
 @theme inline {
@@ -132,6 +138,27 @@
     cursor: pointer;
   }
 }
+/* A night surface inside the light theme (the accounts total card): its
+   content, buttons included, switches to light on dark. Dialogs and menus open
+   outside it, on the body, so they keep the regular theme. */
+.surface-night {
+  --card: var(--brand-night);
+  --card-foreground: #ffffff;
+  --foreground: #ffffff;
+  --muted: var(--brand-surface);
+  --muted-foreground: var(--brand-gray);
+  --primary: #ffffff;
+  --primary-foreground: var(--brand-night);
+  --secondary: var(--brand-surface);
+  --secondary-foreground: #ffffff;
+  --accent: var(--brand-surface);
+  --accent-foreground: #ffffff;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: var(--brand-surface);
+  --input: rgb(255 255 255 / 15%);
+  --ring: var(--brand-gray);
+}
+
 /* Chart series: categorical slots in their validated order (light / dark
    stepped separately), plus neutrals for "Autres" and "Sans catégorie" */
 :root {

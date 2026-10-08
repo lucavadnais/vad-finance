@@ -46,9 +46,9 @@ const projectionMonth = ref<Month>(currentMonth());
          stretches to the forecasts and charts column, and the transactions fill
          what is left (scrolling inside) instead of pushing the page longer -->
     <aside class="contents xl:flex xl:flex-col xl:gap-6 xl:[contain:size]">
-      <Card>
-        <!-- The total of the accounts is the page's headline figure: the biggest
-             number, above the budget's net -->
+      <!-- The total of the accounts is the page's headline figure: the biggest
+           number, above the budget's net, on the night surface -->
+      <Card class="surface-night">
         <CardHeader>
           <CardDescription>Total des comptes</CardDescription>
           <CardTitle class="text-4xl font-semibold tabular-nums" :class="totalCents < 0 && 'text-destructive'">

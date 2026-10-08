@@ -30,9 +30,11 @@ const view = ref<'chart' | 'calendar' | 'table'>('chart');
 // Forecasts and transactions with no category share one pair of bars
 const NONE_KEY = 'none';
 
+// Not by category: the design system's colors, the forecast in gray and
+// what really happened in night
 const SERIES: Series[] = [
-  { key: 'planned', label: 'Prévu', color: 'var(--series-1)' },
-  { key: 'actual', label: 'Réalisé', color: 'var(--series-2)' },
+  { key: 'planned', label: 'Prévu', color: 'var(--brand-gray)' },
+  { key: 'actual', label: 'Réalisé', color: 'var(--brand-night)' },
 ];
 const config: ChartConfig = Object.fromEntries(SERIES.map((s) => [s.key, { label: s.label, color: s.color }]));
 

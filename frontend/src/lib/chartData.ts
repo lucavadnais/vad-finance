@@ -2,11 +2,12 @@
 import type { Account, Category, CategoryGroup, Transaction } from '@/types';
 import { NO_COLOR } from './colors';
 
-export type Period = 'week' | 'month' | '6m' | '12m' | 'year' | 'all';
+export type Period = 'week' | 'month' | '3m' | '6m' | '12m' | 'year' | 'all';
 
 export const PERIODS: Record<Period, string> = {
   week: 'Cette semaine',
   month: 'Mois par mois',
+  '3m': '3 derniers mois',
   '6m': '6 derniers mois',
   '12m': '12 derniers mois',
   year: 'Cette année',
@@ -38,6 +39,7 @@ export function periodStart(period: Period, now = new Date()): Date | null {
   // Weeks start on Monday, like the weekly chart
   if (period === 'week') return new Date(Date.UTC(y, m, now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
   if (period === 'month') return new Date(Date.UTC(y, m, 1));
+  if (period === '3m') return new Date(Date.UTC(y, m - 2, 1));
   if (period === '6m') return new Date(Date.UTC(y, m - 5, 1));
   if (period === '12m') return new Date(Date.UTC(y, m - 11, 1));
   if (period === 'year') return new Date(Date.UTC(y, 0, 1));

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// Transactions, newest first, one page at a time (paginated and searched by the backend)
+// Transactions, newest first, one page at a time (paginated and searched by the backend).
+// Next to the title, an icon per kind of pending review (transfers to link,
+// possible duplicates) opens its dialog.
 import type { Account, Category, Transaction } from '@/types';
 import { computed, onMounted, ref, watch } from 'vue';
-import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, Copy, Search, TriangleAlert, X } from '@lucide/vue';
 import { refDebounced, useMediaQuery } from '@vueuse/core';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,9 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Table, TableBody, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useDuplicateReview } from '@/composables/useDuplicateReview';
+import { useFinanceData } from '@/composables/useFinanceData';
+import { useTransferReview } from '@/composables/useTransferReview';
 import OptionSelect from './OptionSelect.vue';
 import TransactionEditDialog from './TransactionEditDialog.vue';
 import TransactionRow from './TransactionRow.vue';
@@ -31,6 +36,18 @@ const props = defineProps<{
   version: number;
 }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
+
+const { transferCandidates, duplicatePairs } = useFinanceData();
+const { review: reviewTransfers } = useTransferReview();
+const { reviewAll: reviewDuplicates } = useDuplicateReview();
+const plural = (n: number) => (n > 1 ? 's' : '');
+const transfersLabel = computed(
+  () => `${transferCandidates.value.length} transfert${plural(transferCandidates.value.length)} à lier`,
+);
+const duplicatesLabel = computed(() => {
+  const n = duplicatePairs.value.length;
+  return `${n} doublon${plural(n)} possible${plural(n)}`;
+});
 
 const PAGE_SIZES = { '10': '10', '25': '25', '50': '50', '100': '100' };
 
@@ -104,7 +121,33 @@ const range = computed(() => {
 <template>
   <Card>
     <CardHeader>
-      <CardTitle>Transactions</CardTitle>
+      <CardTitle class="flex min-h-8 items-center gap-1">
+        Transactions
+        <Button
+          v-if="transferCandidates.length > 0"
+          size="sm"
+          variant="ghost"
+          class="ml-1 text-amber-600 hover:text-amber-600"
+          :title="transfersLabel"
+          @click="reviewTransfers(transferCandidates)"
+        >
+          <TriangleAlert />
+          <span class="tabular-nums">{{ transferCandidates.length }}</span>
+          <span class="sr-only">{{ transfersLabel }}</span>
+        </Button>
+        <Button
+          v-if="duplicatePairs.length > 0"
+          size="sm"
+          variant="ghost"
+          class="text-amber-600 hover:text-amber-600"
+          :title="duplicatesLabel"
+          @click="reviewDuplicates()"
+        >
+          <Copy />
+          <span class="tabular-nums">{{ duplicatePairs.length }}</span>
+          <span class="sr-only">{{ duplicatesLabel }}</span>
+        </Button>
+      </CardTitle>
       <CardDescription>
         <template v-if="query">{{ total }} résultat(s) pour « {{ query }} ».</template>
         <template v-else>{{ total }} transaction(s), les plus récentes en premier.</template>

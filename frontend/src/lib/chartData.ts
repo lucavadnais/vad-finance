@@ -6,7 +6,7 @@ export type Period = 'week' | 'month' | '6m' | '12m' | 'year' | 'all';
 
 export const PERIODS: Record<Period, string> = {
   week: 'Cette semaine',
-  month: 'Ce mois-ci',
+  month: 'Mois par mois',
   '6m': '6 derniers mois',
   '12m': '12 derniers mois',
   year: 'Cette année',

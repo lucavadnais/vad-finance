@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { Month } from '@/lib/projections';
-import { computed, defineAsyncComponent, ref } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { Pencil } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
+import { duplicateKey, useDuplicateReview } from '@/composables/useDuplicateReview';
+import { useTransferReview } from '@/composables/useTransferReview';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { currentMonth } from '@/lib/projections';
 import { Button } from '@/components/ui/button';
@@ -11,10 +13,10 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
 import CsvImport from '@/components/CsvImport.vue';
-import DuplicateReview from '@/components/DuplicateReview.vue';
+import DuplicateDialog from '@/components/DuplicateDialog.vue';
 import ProjectionMonth from '@/components/ProjectionMonth.vue';
 import TransactionsTable from '@/components/TransactionsTable.vue';
-import TransferSuggestions from '@/components/TransferSuggestions.vue';
+import TransferDialog from '@/components/TransferDialog.vue';
 
 // Charts pull in Unovis (~1 MB): load them in their own chunk
 const DashboardCharts = defineAsyncComponent(() => import('@/components/charts/DashboardCharts.vue'));
@@ -31,6 +33,30 @@ const {
   refresh,
   setError,
 } = useFinanceData();
+
+// After an import or a new transaction, the pairs it brought open their dialog
+// (the ones already found before stay behind their icon). Duplicates first,
+// the transfers once that dialog is closed, never both at once.
+const transferReview = useTransferReview();
+const duplicateReview = useDuplicateReview();
+let pendingTransfers: string[] = [];
+async function refreshAfterAdd() {
+  const transfersBefore = new Set(transferCandidates.value.map((c) => c.out._id));
+  const duplicatesBefore = new Set(duplicatePairs.value.map(duplicateKey));
+  await refresh();
+  const newTransfers = transferCandidates.value.filter((c) => !transfersBefore.has(c.out._id));
+  const newDuplicates = duplicatePairs.value.filter((p) => !duplicatesBefore.has(duplicateKey(p)));
+  if (newDuplicates.length > 0) {
+    pendingTransfers = newTransfers.map((c) => c.out._id);
+    duplicateReview.review(newDuplicates);
+  } else transferReview.review(newTransfers);
+}
+watch(duplicateReview.open, (open) => {
+  if (open || pendingTransfers.length === 0) return;
+  // Deleting a duplicate may have removed a pair in the meantime
+  transferReview.review(transferCandidates.value.filter((c) => pendingTransfers.includes(c.out._id)));
+  pendingTransfers = [];
+});
 
 const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
 
@@ -81,8 +107,8 @@ const projectionMonth = ref<Month>(currentMonth());
         class="order-1 md:order-none"
         :accounts="accounts"
         :categories="categories"
-        @imported="refresh"
-        @created="refresh"
+        @imported="refreshAfterAdd"
+        @created="refreshAfterAdd"
         @error="setError"
       />
 
@@ -114,16 +140,9 @@ const projectionMonth = ref<Month>(currentMonth());
       />
     </div>
 
-    <div class="order-2 flex min-w-0 flex-col gap-6 md:order-none md:col-span-2">
-      <!-- Shown when an import (or a manual entry) produced both sides of a transfer -->
-      <TransferSuggestions
-        v-if="transferCandidates.length > 0"
-        :candidates="transferCandidates"
-        @changed="refresh"
-        @error="setError"
-      />
-
-      <DuplicateReview v-if="duplicatePairs.length > 0" :pairs="duplicatePairs" @changed="refresh" @error="setError" />
-    </div>
+    <!-- Opened after an addition that brought new pairs, or from a transaction's
+         icon. Rendered on the body: no room taken in the grid. -->
+    <TransferDialog @changed="refresh" @error="setError" />
+    <DuplicateDialog @changed="refresh" @error="setError" />
   </div>
 </template>

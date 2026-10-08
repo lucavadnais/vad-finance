@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CategorySelect from './CategorySelect.vue';
 import DatePicker from './DatePicker.vue';
+import InfoTooltip from './InfoTooltip.vue';
 import OptionSelect from './OptionSelect.vue';
 
 const props = defineProps<{
@@ -166,13 +167,15 @@ async function submit() {
           </div>
         </div>
         <div class="flex flex-col gap-2" :class="recurrence === 'once' && 'col-span-2'">
-          <Label>{{ recurrence === 'once' ? 'Date' : 'À partir du' }}</Label>
+          <Label>
+            {{ recurrence === 'once' ? 'Date' : 'À partir du' }}
+            <InfoTooltip v-if="recurrence !== 'once' && startDay > 28 && recurrence !== 'weekly'">
+              Les mois plus courts, elle tombe le dernier jour du mois.
+            </InfoTooltip>
+          </Label>
           <DatePicker v-model="startDate" class="w-full" />
         </div>
       </div>
-      <p v-if="recurrence !== 'once' && startDay > 28 && recurrence !== 'weekly'" class="-mt-2 text-xs text-muted-foreground">
-        Les mois plus courts, elle tombe le dernier jour du mois.
-      </p>
 
       <div v-if="recurrence !== 'once'" class="flex min-h-9 flex-wrap items-center gap-3">
         <Switch id="projection-has-end" v-model="hasEnd" />

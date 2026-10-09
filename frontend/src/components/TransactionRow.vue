@@ -20,7 +20,8 @@ import { useFinanceData } from '@/composables/useFinanceData';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 
-const props = defineProps<{ transaction: Transaction }>();
+// hideAccount: in a list of one account's transactions, its logo on each row says nothing
+const props = defineProps<{ transaction: Transaction; hideAccount?: boolean }>();
 const emit = defineEmits<{ edit: []; changed: []; error: [message: string] }>();
 
 const { categoryColors } = useFinanceData();
@@ -43,14 +44,14 @@ async function remove() {
 
 <template>
   <DefineCategory>
-      <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
-      <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
-        <CategoryDot :color="categoryColors.get(transaction.category._id)" />
-        <span class="truncate">{{ transaction.category.name }}</span>
-      </Badge>
+    <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
+    <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
+      <CategoryDot :color="categoryColors.get(transaction.category._id)" />
+      <span class="truncate">{{ transaction.category.name }}</span>
+    </Badge>
   </DefineCategory>
   <TableRow>
-    <TableCell class="w-px pr-0">
+    <TableCell v-if="!hideAccount" class="w-px pr-0">
       <span v-if="transaction.account" class="flex" :title="transaction.account.name">
         <AccountLogo :account="transaction.account" />
         <span class="sr-only">{{ transaction.account.name }}</span>

@@ -59,7 +59,7 @@ const linkAll = () =>
         <DialogTitle>Transferts à rapprocher</DialogTitle>
         <DialogDescription>
           {{ candidates.length > 1 ? 'Ces paires ressemblent' : 'Cette paire ressemble' }} aux deux côtés d'un même
-          transfert entre tes comptes : même montant, signes opposés, à quelques jours d'écart. Tant qu'elles ne sont
+          transfert entre vos comptes : même montant, signes opposés, à quelques jours d'écart. Tant qu'elles ne sont
           pas liées, elles comptent comme une dépense et un revenu ordinaires ; « Lier » les marque comme transfert
           (exclu de l'analyse).
         </DialogDescription>

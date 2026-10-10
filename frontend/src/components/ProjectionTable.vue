@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // Projections, one row each: name, category and recurrence, a date column and
 // an amount (on a phone, the date goes under the name). With `editable`, each
-// row can be edited or deleted.
+// row can be edited or deleted; on a phone, tapping the row edits it (the
+// deletion is at the bottom of the edit dialog).
 import type { Category, Projection } from '@/types';
-import { Pencil, Trash2 } from '@lucide/vue';
+import { ChevronRight, Pencil, Trash2 } from '@lucide/vue';
+import { useMediaQuery } from '@vueuse/core';
 import { formatCents } from '@/api';
 import { recurrenceLabel } from '@/lib/projections';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +39,8 @@ const emit = defineEmits<{ edit: [projection: Projection]; remove: [projection: 
 
 const { categoryColors } = useFinanceData();
 
+const phone = useMediaQuery('(max-width: 639px)');
+
 const categoryName = (id: string | null) => props.categories.find((c) => c._id === id)?.name;
 </script>
 
@@ -47,11 +51,16 @@ const categoryName = (id: string | null) => props.categories.find((c) => c._id =
         <TableHead>Nom</TableHead>
         <TableHead class="hidden sm:table-cell">{{ dateLabel }}</TableHead>
         <TableHead class="text-right">Montant</TableHead>
-        <TableHead v-if="editable" />
+        <TableHead v-if="editable" class="max-sm:w-0 max-sm:px-0" />
       </TableRow>
     </TableHeader>
     <TableBody>
-      <TableRow v-for="r in rows" :key="r.projection._id" :class="!r.date && 'text-muted-foreground'">
+      <TableRow
+        v-for="r in rows"
+        :key="r.projection._id"
+        :class="[!r.date && 'text-muted-foreground', editable && 'max-sm:cursor-pointer max-sm:active:bg-muted']"
+        @click="editable && phone && emit('edit', r.projection)"
+      >
         <TableCell class="whitespace-normal">
           <span class="font-medium">{{ r.projection.name }}</span>
           <Badge v-if="categoryName(r.projection.category)" variant="outline" class="ml-2 whitespace-normal">
@@ -73,9 +82,10 @@ const categoryName = (id: string | null) => props.categories.find((c) => c._id =
           </div>
           <div v-if="r.detail" class="text-xs text-muted-foreground">{{ r.detail }}</div>
         </TableCell>
-        <TableCell v-if="editable" class="w-0">
-          <!-- Stacked on a phone, to leave the name more room -->
-          <div class="flex flex-col items-end sm:flex-row sm:justify-end">
+        <TableCell v-if="editable" class="w-0 max-sm:pr-0 max-sm:pl-1">
+          <!-- Phone: a chevron, the row opens its edition -->
+          <ChevronRight class="size-4 text-muted-foreground sm:hidden" />
+          <div class="flex justify-end max-sm:hidden">
             <Button
               size="icon-sm"
               variant="ghost"

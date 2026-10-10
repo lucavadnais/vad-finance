@@ -1,27 +1,29 @@
 <script setup lang="ts">
 // Where a month stands (the phone's "Dépenses" tab, a card on a computer): how
-// the spending went, laid out like an account's page, then the budget's net,
-// income and spending tiles, then where the spending went, by category (the
-// analysis' donut, for the month). The spending as a running total over the
-// days of the month: the month in the accent color, the average of the three
-// months before in gray behind it, the planned spending as a dashed level. The
-// month is shared with the budget card, and its forecasts open there (`edit`).
+// the spending went, laid out like an account's page, then what is left to
+// spend (phone only, opening the budget tab: `open-budget`), then where the spending went, by
+// category (the analysis' donut, for the month). The spending as a running
+// total over the days of the month: the month in the accent color, the median
+// of the three months before in gray behind it, the planned spending as a
+// dashed level. The month is shared with the budget card.
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { ChevronRight } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useMediaQuery, useWindowSize } from '@vueuse/core';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { budget, budgetSection } from '@/lib/budget';
 import type { ChartSelection } from '@/lib/chartData';
 import { expenseSeries, expensesByMonth, selectedExpenses } from '@/lib/chartData';
-import { addMonths, currentMonth, monthLabel, sameMonth } from '@/lib/projections';
-import { dailySpending, daysIn, runningTotal } from '@/lib/spending';
+import { currentMonth, monthLabel, sameMonth } from '@/lib/projections';
+import { dailySpending, daysIn, medianRunningTotal, runningTotal, vsUsualPercent } from '@/lib/spending';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import BudgetSummary from './BudgetSummary.vue';
+import { Progress } from '@/components/ui/progress';
 import TrendChart from './TrendChart.vue';
+import VsUsual from './VsUsual.vue';
 import SelectedTransactions from './charts/SelectedTransactions.vue';
 
 // The donut pulls in Unovis (~1 MB): load it in its own chunk
@@ -31,15 +33,12 @@ import PageBar from './PageBar.vue';
 
 const props = defineProps<{ transactions: Transaction[]; projections: Projection[]; categories: Category[] }>();
 const month = defineModel<Month>({ required: true });
-const emit = defineEmits<{ edit: [projection: Projection] }>();
+const emit = defineEmits<{ 'open-budget': [] }>();
 const { settings, categoryGroups, categoryColors } = useFinanceData();
 
 const now = currentMonth();
 const isCurrent = computed(() => sameMonth(month.value, now));
 const isFuture = computed(() => Date.UTC(month.value.year, month.value.month) > Date.UTC(now.year, now.month));
-
-// Side of the budget shown by category (income or spending tile clicked)
-const expanded = ref<'income' | 'expense' | null>(null);
 
 // The month's spending: up to today when it is the current one, nothing yet
 // for a month to come
@@ -49,21 +48,13 @@ const spent = computed(() => {
   return isCurrent.value ? total.slice(0, new Date().getUTCDate()) : total;
 });
 
-// The three months before, from the first one with any transaction: the
-// average running total of each day (a shorter month stays at its total)
-const firstDate = computed(() => Math.min(...props.transactions.map((t) => Date.parse(t.date))));
-const average = computed(() => {
-  const months = [1, 2, 3]
-    .map((i) => addMonths(month.value, -i))
-    .filter((m) => Date.UTC(m.year, m.month + 1, 1) > firstDate.value);
-  if (months.length === 0) return null;
-  const totals = months.map((m) => runningTotal(dailySpending(props.transactions, m)));
-  return Array.from(
-    { length: daysIn(month.value) },
-    (_, d) => totals.reduce((sum, t) => sum + t[Math.min(d, t.length - 1)]!, 0) / totals.length,
-  );
-});
-const averageCents = computed(() => (average.value ? Math.round(average.value.at(-1)!) : null));
+// The three months before, their median day by day (see lib/spending.ts)
+const median = computed(() => medianRunningTotal(props.transactions, month.value));
+// The legend: the month against the median by its last day so far (today,
+// or the month's end), as the home's spending tile says it
+const vsUsual = computed(() =>
+  spent.value.length > 0 ? vsUsualPercent(spent.value.at(-1)!, median.value?.[spent.value.length - 1]) : null,
+);
 
 // The month's spending side of the budget, as the spending tile counts it
 const spending = computed(() =>
@@ -74,6 +65,9 @@ const spending = computed(() =>
 );
 // The planned spending, buffer included
 const plannedCents = computed(() => spending.value.total.plannedCents || undefined);
+const spendingProgress = computed(() =>
+  plannedCents.value ? Math.min(100, (spending.value.total.actualCents / plannedCents.value) * 100) : null,
+);
 
 // Count grouped categories under their group (e.g. "Milieu de vie")
 const grouped = ref(false);
@@ -115,7 +109,12 @@ const slots = computed(() => daysIn(month.value) + 1);
 // Phone: almost the visible screen's height, under the page's bar and the
 // figure above the chart (about 320px with the app's header and the tab bar)
 const phone = useMediaQuery('(max-width: 767px)');
-const { height: screenHeight } = useWindowSize();
+// The screen's height is read again only when its width changes (rotation):
+// a phone's address bar showing and hiding while scrolling changes the height,
+// and the chart would resize with it.
+const { width: screenWidth, height: windowHeight } = useWindowSize();
+const screenHeight = ref(windowHeight.value);
+watch(screenWidth, () => (screenHeight.value = windowHeight.value));
 const chartHeight = computed(() => (phone.value ? Math.max(240, screenHeight.value - 320) : 240));
 const dayLabels = computed(() =>
   Array.from({ length: slots.value }, (_, d) =>
@@ -145,7 +144,7 @@ const dayLabels = computed(() =>
     <CardContent class="flex flex-col gap-4 max-md:px-0">
       <!-- First the spending day by day, laid out like an account's page: the
            figure in big, the lines' references beside it, then the chart (a
-           month to come: nothing spent yet, but its budget and the average) -->
+           month to come: nothing spent yet, but its budget and the median) -->
       <div class="flex items-start gap-4">
         <div class="mr-auto min-w-0">
           <p class="text-[clamp(2rem,11vw,3rem)] leading-none font-semibold tracking-tight tabular-nums">
@@ -155,42 +154,57 @@ const dayLabels = computed(() =>
             Dépensé en {{ monthLabel(month) }}
           </p>
         </div>
-        <!-- The chart's legend: the average (gray); the dashed budget is in the tooltip and the spending tile -->
-        <div class="flex shrink-0 flex-col gap-1.5 pt-1 text-right text-sm whitespace-nowrap">
-          <div v-if="averageCents !== null">
-            <p class="flex items-center justify-end gap-1.5 text-muted-foreground">
-              <span class="size-2.5 rounded-full bg-[var(--brand-gray)]" />
-              Moy. 3 mois
-            </p>
-            <p class="font-semibold tabular-nums">{{ formatCents(averageCents) }}</p>
-          </div>
-        </div>
+        <!-- The chart's legend: against the median (the gray line, its dot), as
+             the home's tile says it; its amounts are in the tooltip, like the
+             dashed budget -->
+        <VsUsual v-if="vsUsual !== null" :percent="vsUsual" dot align="end" class="shrink-0 pt-1 whitespace-nowrap" />
       </div>
       <!-- Edge to edge: out of the page's (phone) or the card's side padding -->
       <TrendChart
         :values="isFuture ? [] : [0, ...spent]"
         empty-message="Le mois n'a pas encore commencé"
-        :compare="average ? [0, ...average] : undefined"
+        :compare="median ? [0, ...median] : undefined"
         :target="plannedCents"
         :slots="slots"
         :x-labels="dayLabels"
         :height="chartHeight"
         :main-label="isCurrent ? 'Ce mois-ci' : 'Ce mois-là'"
-        compare-label="Moy. 3 mois"
+        compare-label="Méd. 3 mois"
         target-label="Prévu"
         class="-mx-4 md:-mx-6 md:[--chart-gutter:24px]"
       />
 
-      <!-- Then where the month stands: net, income and spending -->
-      <BudgetSummary
-        v-model:expanded="expanded"
-        :month="month"
-        :projections="projections"
-        :transactions="transactions"
-        :categories="categories"
-        class="pt-2"
-        @edit="emit('edit', $event)"
-      />
+      <!-- Phone: then what is left of the month's spending budget, as the
+           budget's spending tile counts it; the whole tile opens the budget tab -->
+      <button
+        type="button"
+        class="flex flex-col gap-2 rounded-lg border p-4 text-left text-sm transition-colors hover:bg-muted/50 md:hidden"
+        @click="emit('open-budget')"
+      >
+        <span class="flex items-center gap-2">
+          <span v-if="spendingProgress === null" class="text-muted-foreground">Aucune dépense prévue ce mois-ci</span>
+          <span v-else-if="spending.summary.overrunCents > 0" class="text-destructive">
+            Dépassé de <span class="font-semibold tabular-nums">{{ formatCents(spending.summary.overrunCents) }}</span>
+          </span>
+          <span v-else>
+            Reste à dépenser
+            <span class="font-semibold tabular-nums">{{
+              formatCents(Math.max(0, spending.total.plannedCents - spending.total.actualCents))
+            }}</span>
+            <span class="text-muted-foreground tabular-nums"> sur {{ formatCents(plannedCents!) }}</span>
+          </span>
+          <span class="ml-auto flex shrink-0 items-center text-muted-foreground">
+            Budget
+            <ChevronRight class="size-4" />
+          </span>
+        </span>
+        <Progress
+          v-if="spendingProgress !== null"
+          :model-value="spendingProgress"
+          class="h-1.5"
+          :class="spending.summary.overrunCents > 0 && '*:data-[slot=progress-indicator]:bg-destructive'"
+        />
+      </button>
 
       <!-- Last, where the spending went: each category's share of the month -->
       <section class="flex flex-col gap-2 border-t pt-4">

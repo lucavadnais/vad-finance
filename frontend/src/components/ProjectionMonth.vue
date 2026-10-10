@@ -1,18 +1,22 @@
 <script setup lang="ts">
-// Planning of a month: the forecasts vs actual chart by category, and the
-// forecasts themselves ("Gérer les prévisions" lists them all, to edit or
-// delete). The month's figures (net, income, spending) are in the month card
-// (SpendInsights), which shares the month and opens the forecasts through
-// `openDialog`.
+// Planning of a month: its planned spending or income, and a card per
+// category (BudgetOverview), the forecasts vs actual chart (of the selected
+// card, or the month's income and spending); or, picked at the top instead,
+// the forecasts on a calendar. "Gérer les prévisions" lists them all, to edit
+// or delete. The month is shared with the month card (SpendInsights).
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
+import { addMonths, currentMonth, monthLabel } from '@/lib/projections';
 import { defineAsyncComponent, ref } from 'vue';
-import { ListChecks, Plus } from '@lucide/vue';
+import { CalendarDays, LayoutGrid, Target } from '@lucide/vue';
 import { api } from '@/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { BudgetFocus } from './BudgetOverview.vue';
+import BudgetOverview from './BudgetOverview.vue';
+import ProjectionCalendar from './ProjectionCalendar.vue';
 import ProjectionDialog from './ProjectionDialog.vue';
-import ProjectionList from './ProjectionList.vue';
 import ProjectionListDialog from './ProjectionListDialog.vue';
 import PageBar from './PageBar.vue';
 
@@ -27,6 +31,18 @@ defineProps<{
 }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
+// The overview, or the calendar alone (it takes room)
+const view = ref<'overview' | 'calendar'>('overview');
+
+// The budget card's arrows go anywhere: the calendar's too
+const now = currentMonth();
+const calendarMin = addMonths(now, -120);
+const calendarMax = addMonths(now, 120);
+
+// Card selected above, and its amounts, shown by the chart
+const selected = ref<string | null>(null);
+const focus = ref<BudgetFocus | null>(null);
+
 // Dialog listing them all
 const listOpen = ref(false);
 
@@ -38,8 +54,6 @@ function openDialog(p: Projection | null) {
   editing.value = p;
   dialogOpen.value = true;
 }
-
-defineExpose({ openDialog });
 
 async function remove(p: Projection) {
   try {
@@ -54,55 +68,87 @@ async function remove(p: Projection) {
 <template>
   <!-- A card on a computer; flat in its tab on a phone, like the others -->
   <Card class="max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:py-0 max-md:shadow-none">
-    <!-- Computer: the title and the actions. The month is set by the month card
-         above (SpendInsights) -->
+    <!-- Computer: the title (the actions are by the categories' cards). The
+         month is set by the month card above (SpendInsights) -->
     <CardHeader class="max-md:hidden">
       <CardTitle class="flex min-h-8 items-center text-lg">Budget</CardTitle>
-      <CardAction class="flex items-center gap-2">
-        <Button v-if="projections.length > 0" variant="ghost" @click="listOpen = true">
-          <ListChecks />
-          Gérer les prévisions
-        </Button>
-        <Button @click="openDialog(null)">
-          <Plus />
-          Prévision
-        </Button>
-      </CardAction>
     </CardHeader>
-    <!-- Phone: the page's bar, with the month (the actions are by the list) -->
+    <!-- Phone: the page's bar, with the month -->
     <PageBar v-model:month="month" title="Budget" class="md:hidden" />
     <CardContent class="flex flex-col gap-4 max-md:px-0">
-      <!-- Forecasts vs actual by category, for the month shown -->
-      <ProjectionsChart
-        v-if="projections.length > 0"
-        v-model="month"
-        :projections="projections"
-        :transactions="transactions"
-        :categories="categories"
-        @edit="openDialog"
-      />
+      <!-- What the card shows: the overview (total, categories, chart) or the
+           forecasts on a calendar; the whole width on a phone -->
+      <Tabs v-model="view">
+        <TabsList class="max-md:w-full">
+          <TabsTrigger value="overview" class="max-md:flex-1">
+            <LayoutGrid />
+            Aperçu
+          </TabsTrigger>
+          <TabsTrigger value="calendar" class="max-md:flex-1">
+            <CalendarDays />
+            Calendrier
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <!-- Phone: the list right under the chart, instead of its dialog, with the
-           button to add one top right -->
-      <section class="flex flex-col gap-3 border-t pt-4 md:hidden">
-        <div class="flex items-center justify-between gap-2">
-          <h3 class="text-sm font-medium">Prévisions</h3>
-          <Button
-            size="icon"
-            aria-label="Ajouter une prévision"
-            title="Ajouter une prévision"
-            @click="openDialog(null)"
-          >
-            <Plus />
-          </Button>
+      <template v-if="view === 'overview'">
+        <!-- The month's planned total, and its categories -->
+        <BudgetOverview
+          v-model:selected="selected"
+          v-model:focus="focus"
+          :month="month"
+          :projections="projections"
+          :transactions="transactions"
+          :categories="categories"
+          @add="openDialog(null)"
+          @manage="listOpen = true"
+        />
+        <!-- Forecasts vs actual by category, for the month shown -->
+        <ProjectionsChart
+          v-if="projections.length > 0"
+          v-model="month"
+          :projections="projections"
+          :transactions="transactions"
+          :categories="categories"
+          :focus="focus"
+        />
+
+        <!-- Coming soon: savings goals, announced where the month is planned -->
+        <div
+          class="flex items-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/30 p-4 text-sm"
+          aria-disabled="true"
+        >
+          <Target class="size-5 shrink-0 text-muted-foreground" />
+          <span class="flex min-w-0 flex-col">
+            <span class="font-medium">Objectifs d'épargne</span>
+            <span class="text-muted-foreground"
+              >Mettre de l'argent de côté pour un projet et suivre où vous en êtes.</span
+            >
+          </span>
+          <Badge variant="secondary" class="ml-auto shrink-0">Bientôt</Badge>
         </div>
-        <ProjectionList :projections="projections" :categories="categories" @edit="openDialog" @remove="remove" />
+      </template>
+
+      <!-- The month's forecasts day by day, each opening its edition -->
+      <section v-else class="flex flex-col gap-3">
+        <div>
+          <h3 class="text-sm font-medium first-letter:uppercase">Calendrier · {{ monthLabel(month) }}</h3>
+          <p class="text-sm text-muted-foreground">Touchez une prévision pour la modifier.</p>
+        </div>
+        <ProjectionCalendar
+          v-model="month"
+          :projections="projections"
+          :min="calendarMin"
+          :max="calendarMax"
+          @edit="openDialog"
+        />
       </section>
 
       <ProjectionListDialog
         v-model:open="listOpen"
         :projections="projections"
         :categories="categories"
+        @add="openDialog(null)"
         @edit="openDialog"
         @remove="remove"
       />
@@ -111,6 +157,7 @@ async function remove(p: Projection) {
         :categories="categories"
         :projection="editing"
         @saved="emit('changed')"
+        @remove="remove"
       />
     </CardContent>
   </Card>

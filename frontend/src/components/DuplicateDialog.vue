@@ -67,7 +67,7 @@ const ignore = (p: DuplicatePair) => run(() => api.ignoreDuplicate([p.a._id, p.b
       <DialogHeader>
         <DialogTitle>Doublons possibles</DialogTitle>
         <DialogDescription>
-          Même compte et même montant, à 3 jours d'écart au plus. Supprime celle en trop, ou indique que ce ne sont pas
+          Même compte et même montant, à 3 jours d'écart au plus. Supprimez celle en trop, ou indiquez que ce ne sont pas
           des doublons.
         </DialogDescription>
       </DialogHeader>

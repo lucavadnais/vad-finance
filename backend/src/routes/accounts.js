@@ -132,7 +132,7 @@ router.delete('/:id', async (req, res) => {
   if (req.query.moveTo) {
     const target = await Account.findById(req.query.moveTo);
     if (!target) throw httpError(404, 'Compte de destination introuvable');
-    if (target._id.equals(account._id)) throw httpError(400, 'Choisis un autre compte que celui à supprimer');
+    if (target._id.equals(account._id)) throw httpError(400, 'Choisissez un autre compte que celui à supprimer');
     if (target.currency !== account.currency) {
       throw httpError(400, `Le compte de destination doit être en ${account.currency}`);
     }

@@ -98,7 +98,7 @@ const barEvents = {
           <!-- Extra controls from the parent (the week / month choice): they
                shape the bars and the table, not the share of the period -->
           <slot v-if="view !== 'share'" name="actions" />
-          <!-- Icons only on a phone, so the controls fit on one line -->
+          <!-- Icons only on a phone, so the controls fit on one line; no table there -->
           <TabsList class="ml-auto">
             <TabsTrigger value="share" aria-label="Répartition" title="Répartition">
               <ChartPie class="md:hidden" />
@@ -108,7 +108,7 @@ const barEvents = {
               <ChartColumn class="md:hidden" />
               <span class="max-md:sr-only">Graphique</span>
             </TabsTrigger>
-            <TabsTrigger value="table" aria-label="Tableau" title="Tableau">
+            <TabsTrigger value="table" aria-label="Tableau" title="Tableau" class="max-md:hidden">
               <Table2 class="md:hidden" />
               <span class="max-md:sr-only">Tableau</span>
             </TabsTrigger>

@@ -128,7 +128,7 @@ export async function createTransfer({ from, to, date, description = '', amountC
     throw httpError(400, 'Le montant doit être positif');
   }
   if (!from || !to || String(from) === String(to)) {
-    throw httpError(400, 'Choisis deux comptes différents');
+    throw httpError(400, 'Choisissez deux comptes différents');
   }
   const [out, inc] = await Transaction.create([
     { account: from, date, description, amountCents: -amountCents, transferAccount: to },

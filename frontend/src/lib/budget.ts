@@ -127,6 +127,19 @@ function summarize(compared: BudgetRow[], unplannedCents: number) {
   return { leftCents, lateCents, extraCents };
 }
 
+// The whole month, estimated: what already came in and went out, plus the
+// forecasts not reached yet (to receive; to spend, and what is left of the
+// buffer). A finished month keeps its actual amounts: what did not happen will
+// not anymore. The net is income minus spending.
+export function estimatedMonth(b: Budget, bufferCents: number, past: boolean) {
+  const income = budgetSection(b.income);
+  const expense = budgetSection(b.expense, bufferCents);
+  const incomeCents = sum(b.income).actualCents + (past ? 0 : income.summary.leftCents);
+  const spendingCents =
+    sum(b.expense).actualCents + (past ? 0 : expense.summary.leftCents + bufferCents - expense.summary.bufferUsedCents);
+  return { incomeCents, spendingCents, netCents: incomeCents - spendingCents };
+}
+
 // One side of the budget (income or spending) summed up the way the budget
 // card shows it: compared rows, then the categories with no forecast (folded),
 // then the forecasts with no category (nothing to compare them with). For

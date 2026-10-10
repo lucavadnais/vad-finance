@@ -5,6 +5,7 @@ import type { Category, CategoryKind, Projection, ProjectionInput, Recurrence } 
 import { computed, ref, watch } from 'vue';
 import { api, toCents, toDateInput } from '@/api';
 import { PROJECTION_KINDS, RECURRENCE_UNITS, RECURRENCES } from '@/lib/labels';
+import { Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CategorySelect from './CategorySelect.vue';
+import ConfirmDialog from './ConfirmDialog.vue';
 import DatePicker from './DatePicker.vue';
 import InfoTooltip from './InfoTooltip.vue';
 import OptionSelect from './OptionSelect.vue';
@@ -21,7 +23,7 @@ const props = defineProps<{
   // The one to edit, or null to create one
   projection: Projection | null;
 }>();
-const emit = defineEmits<{ saved: []; cancel: [] }>();
+const emit = defineEmits<{ saved: []; cancel: []; remove: [] }>();
 
 const kind = ref<CategoryKind>('expense');
 const name = ref('');
@@ -56,9 +58,7 @@ function reset() {
   category.value = p?.category ?? null;
   hasEnd.value = !!p?.endDate;
   // Defaults to a year from now
-  endDate.value = p?.endDate
-    ? toDateInput(p.endDate)
-    : isoDay(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  endDate.value = p?.endDate ? toDateInput(p.endDate) : isoDay(now.getFullYear() + 1, now.getMonth(), now.getDate());
   error.value = '';
 }
 reset();
@@ -93,7 +93,7 @@ async function submit() {
     return;
   }
   if (!startDate.value) {
-    error.value = 'Choisis une date';
+    error.value = 'Choisissez une date';
     return;
   }
   const body: ProjectionInput = {
@@ -187,9 +187,19 @@ async function submit() {
     </DialogBody>
 
     <DialogFooter>
-      <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')">
-        Annuler
-      </Button>
+      <!-- Editing: deleting it, set apart on the left (last, under the others, on a phone) -->
+      <ConfirmDialog v-if="projection" :title="`Supprimer « ${projection.name} » ?`" @confirm="emit('remove')">
+        <Button
+          type="button"
+          variant="ghost"
+          class="text-destructive hover:text-destructive sm:mr-auto"
+          :disabled="saving"
+        >
+          <Trash2 />
+          Supprimer la prévision
+        </Button>
+      </ConfirmDialog>
+      <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')"> Annuler </Button>
       <Button type="submit" :disabled="saving">
         {{ saving ? 'Enregistrement…' : projection ? 'Enregistrer' : 'Ajouter' }}
       </Button>

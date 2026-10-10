@@ -163,7 +163,7 @@ export interface ImportSummary {
 
 // App settings (GET/PUT /settings)
 export interface Settings {
-  // Kept aside each month for unplanned spending, see BudgetSummary
+  // Kept aside each month for unplanned spending, see lib/budget.ts
   budgetBufferCents: number;
   // Charts show their axes (TrendChart)
   chartAxes: boolean;

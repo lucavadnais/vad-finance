@@ -99,7 +99,7 @@ async function submit() {
   const chosen = rows.value.filter((_, i) => selected.value[i]);
   const isTransfer = (r: (typeof chosen)[number]) => r.category === TRANSFER;
   if (chosen.some((r) => isTransfer(r) && (!r.transferAccount || r.transferAccount === accountId.value))) {
-    error.value = "Choisis l'autre compte de chaque transfert";
+    error.value = "Choisissez l'autre compte de chaque transfert";
     return;
   }
   saving.value = true;
@@ -135,7 +135,7 @@ async function submit() {
           <DialogDescription>
             {{ count }} transaction(s) lue(s){{
               result.errors.length > 0 ? `, ${result.errors.length} ligne(s) ignorée(s)` : ''
-            }}. Choisis le compte, puis ajuste les descriptions et les catégories au besoin.
+            }}. Choisissez le compte, puis ajustez les descriptions et les catégories au besoin.
           </DialogDescription>
         </DialogHeader>
 
@@ -143,7 +143,7 @@ async function submit() {
           <div class="flex flex-col gap-2">
             <Label for="import-account">Compte</Label>
             <p v-if="accounts.length === 0" class="text-sm text-destructive">
-              Aucun compte : crée d'abord le compte dans la carte Comptes.
+              Aucun compte : créez d'abord le compte dans la carte Comptes.
             </p>
             <AccountSelect v-else id="import-account" v-model="accountId" :accounts="accounts" class="w-72" />
           </div>
@@ -205,13 +205,13 @@ async function submit() {
           </div>
 
           <p class="text-sm text-muted-foreground">
-            <template v-if="!account">Choisis le compte pour vérifier les doublons.</template>
+            <template v-if="!account">Choisissez le compte pour vérifier les doublons.</template>
             <template v-else-if="checking">Recherche des doublons…</template>
             <template v-else>
               {{ selectedCount }} transaction(s) sur {{ count }} seront ajoutées à « {{ account.name }} ».
               <template v-if="exactCount > 0"> {{ exactCount }} déjà présente(s), décochée(s). </template>
               <template v-if="possibleCount > 0">
-                {{ possibleCount }} doublon(s) possible(s) à vérifier : décoche celles déjà saisies.
+                {{ possibleCount }} doublon(s) possible(s) à vérifier : décochez celles déjà saisies.
               </template>
             </template>
           </p>

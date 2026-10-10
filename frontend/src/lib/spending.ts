@@ -1,8 +1,10 @@
-// Spending of a month day by day, and the smooth curve the phone charts draw
-// through it (SpendInsights, the home tiles' sparklines)
+// Spending of a month day by day, the usual spending to compare it with, and
+// the smooth curve the phone charts draw through it (SpendInsights, the home
+// tiles' sparklines)
 import type { Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { isExpense } from '@/lib/chartData';
+import { addMonths } from '@/lib/projections';
 
 export const daysIn = (m: Month) => new Date(Date.UTC(m.year, m.month + 1, 0)).getUTCDate();
 
@@ -21,6 +23,26 @@ export function runningTotal(values: number[]) {
   let sum = 0;
   return values.map((v) => (sum += v));
 }
+
+// The three months before `m`, from the first one with any transaction: the
+// median running total of each day of `m` (a shorter month stays at its
+// total), so one unusual month does not pull the line. Null with no history.
+export function medianRunningTotal(transactions: Transaction[], m: Month) {
+  const first = Math.min(...transactions.map((t) => Date.parse(t.date)));
+  const months = [1, 2, 3].map((i) => addMonths(m, -i)).filter((p) => Date.UTC(p.year, p.month + 1, 1) > first);
+  if (months.length === 0) return null;
+  const totals = months.map((p) => runningTotal(dailySpending(transactions, p)));
+  return Array.from({ length: daysIn(m) }, (_, d) => {
+    const day = totals.map((t) => t[Math.min(d, t.length - 1)]!).sort((a, b) => a - b);
+    const mid = day.length >> 1;
+    return day.length % 2 ? day[mid]! : (day[mid - 1]! + day[mid]!) / 2;
+  });
+}
+
+// How much more (positive) or less was spent than the usual, in percent;
+// null with no usual to compare with
+export const vsUsualPercent = (spentCents: number, usualCents: number | undefined) =>
+  usualCents ? Math.round(((spentCents - usualCents) / usualCents) * 100) : null;
 
 export type Point = readonly [x: number, y: number];
 

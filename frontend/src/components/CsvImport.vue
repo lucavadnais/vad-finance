@@ -84,7 +84,7 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
     <CardHeader class="max-md:px-0">
       <CardTitle>Ajouter des transactions</CardTitle>
       <CardDescription class="max-md:hidden">
-        Dépose le relevé CSV de ta banque : tu choisiras le compte et vérifieras les transactions avant de les importer.
+        Déposez le relevé CSV de votre banque : vous choisirez le compte et vérifierez les transactions avant de les importer.
       </CardDescription>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 max-md:px-0">
@@ -105,7 +105,7 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
           <template v-else-if="fileName">{{ fileName }}</template>
           <template v-else>
             <span class="md:hidden">Importer un relevé CSV</span>
-            <span class="max-md:hidden">Glisse ton relevé CSV ici</span>
+            <span class="max-md:hidden">Glissez votre relevé CSV ici</span>
           </template>
         </p>
         <p v-if="!loading && !fileName" class="text-sm text-muted-foreground max-md:hidden">
@@ -150,7 +150,7 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
             @created="emit('created')"
             @error="emit('error', $event)"
           />
-          <p v-else class="text-sm text-muted-foreground">Crée d'abord un compte dans la carte Comptes.</p>
+          <p v-else class="text-sm text-muted-foreground">Créez d'abord un compte dans la carte Comptes.</p>
         </CollapsibleContent>
       </Collapsible>
     </CardContent>

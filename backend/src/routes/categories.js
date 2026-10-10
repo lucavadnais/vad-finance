@@ -31,7 +31,7 @@ router.put('/:id', async (req, res) => {
   const current = await Category.findById(req.params.id, 'archived').lean();
   if (!current) return res.status(404).json({ error: 'Category not found' });
   if (current.archived && !(fields.archived === false && Object.keys(fields).length === 1)) {
-    return res.status(409).json({ error: 'Désarchive la catégorie pour la modifier' });
+    return res.status(409).json({ error: 'Désarchivez la catégorie pour la modifier' });
   }
   if (fields.color === null || fields.color === '') fields.color = pickColor(await usedColors(req.params.id));
   const category = await Category.findByIdAndUpdate(req.params.id, fields, {

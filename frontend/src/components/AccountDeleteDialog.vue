@@ -140,7 +140,7 @@ async function confirm() {
                 compte de destination
               </span>
               <span class="text-muted-foreground">
-                Garde le même total. Décoche si les deux comptes représentent le même compte bancaire.
+                Garde le même total. Décochez si les deux comptes représentent le même compte bancaire.
               </span>
             </Label>
           </div>

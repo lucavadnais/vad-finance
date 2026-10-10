@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Every projection once, with its next date, to edit or delete. The search
 // keeps the ones whose name, category, recurrence or amount match. In the
-// "Gérer les prévisions" dialog, and right in the budget tab on a phone.
+// "Gérer les prévisions" dialog.
 import type { Category, Projection } from '@/types';
 import type { ProjectionRow } from './ProjectionTable.vue';
 import { computed, ref } from 'vue';
@@ -52,26 +52,30 @@ const rows = computed<ProjectionRow[]>(() =>
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="relative">
-      <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        v-model="search"
-        type="search"
-        placeholder="Nom, catégorie, récurrence, montant…"
-        aria-label="Rechercher une prévision"
-        class="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
-        @keydown.esc="clearOnEscape"
-      />
-      <Button
-        v-if="search"
-        variant="ghost"
-        size="icon-xs"
-        class="absolute top-1/2 right-1.5 -translate-y-1/2"
-        aria-label="Effacer la recherche"
-        @click="search = ''"
-      >
-        <X />
-      </Button>
+    <!-- The search, and the parent's actions beside it (`actions` slot) -->
+    <div class="flex items-center gap-2">
+      <div class="relative min-w-0 flex-1">
+        <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          v-model="search"
+          type="search"
+          placeholder="Nom, catégorie, récurrence, montant…"
+          aria-label="Rechercher une prévision"
+          class="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
+          @keydown.esc="clearOnEscape"
+        />
+        <Button
+          v-if="search"
+          variant="ghost"
+          size="icon-xs"
+          class="absolute top-1/2 right-1.5 -translate-y-1/2"
+          aria-label="Effacer la recherche"
+          @click="search = ''"
+        >
+          <X />
+        </Button>
+      </div>
+      <slot name="actions" />
     </div>
     <ProjectionTable
       :rows="rows"

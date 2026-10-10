@@ -5,7 +5,7 @@
 // y axis on the left: round amounts in their own column, from the parent's
 // side padding, and light lines across. Always with a tooltip on the hovered
 // (or touched) point: its label, then each line's value.
-// - `compare` draws a gray line to compare with behind it (an average)
+// - `compare` draws a gray line to compare with behind it (a median)
 // - `target` draws a dashed level to reach or not to pass (planned spending)
 // - `slots` spreads the values over more x positions than they fill (the days
 //   of a month that has not ended yet); `x` places them at their dates

@@ -30,8 +30,8 @@ const formatRowDate = (row: Row) => new Date(row.t).toLocaleDateString('fr-CA', 
       <CardHeader class="max-md:px-0">
         <CardTitle>Fluctuation du solde</CardTitle>
         <CardDescription>Solde total de tous les comptes, après chaque journée de transactions.</CardDescription>
-        <!-- The views top right; icons only on a phone -->
-        <CardAction>
+        <!-- The views top right; none on a phone, the chart only -->
+        <CardAction class="max-md:hidden">
           <TabsList>
             <TabsTrigger value="chart" aria-label="Graphique" title="Graphique">
               <ChartLine class="md:hidden" />

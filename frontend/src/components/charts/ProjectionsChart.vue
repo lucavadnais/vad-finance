@@ -1,161 +1,183 @@
 <script setup lang="ts">
-// Forecasts vs actual for the month shown by the budget card: a pair of bars
-// per category, "Prévu" then "Réalisé". Spending or income, picked above the
-// chart. Or that month as a calendar.
+// Forecasts vs actual for the month shown by the budget card: a plain bar
+// chart, each bar what really came in or went out, topped in a paler shade by
+// what is still planned (spending past its forecast: the forecast and a red
+// bar side by side). The month's income and spending; or, with a card
+// selected above (`focus`), that category alone.
 import type { ChartConfig } from '@/components/ui/chart';
-import type { Row, Series } from '@/lib/chartData';
 import type { Month } from '@/lib/projections';
-import type { CategoryKind, Category, Projection, Transaction } from '@/types';
-import { computed, ref } from 'vue';
-import { CalendarDays, ChartColumn, Table2 } from '@lucide/vue';
-import { GroupedBar } from '@unovis/ts';
-import { VisAxis, VisGroupedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
-import { amountTickFormat } from '@/api';
-import { budget } from '@/lib/budget';
-import { addMonths, currentMonth, monthLabel } from '@/lib/projections';
-import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import OptionSelect from '../OptionSelect.vue';
-import ProjectionCalendar from '../ProjectionCalendar.vue';
-import SeriesTable from './SeriesTable.vue';
-import { tooltipTemplate } from './tooltip';
+import type { Category, Projection, Transaction } from '@/types';
+import type { BudgetFocus } from '../BudgetOverview.vue';
+import { computed, useTemplateRef } from 'vue';
+import { useElementSize } from '@vueuse/core';
+import { VisAxis, VisStackedBar, VisXYContainer } from '@unovis/vue';
+import { amountTickFormat, formatCents } from '@/api';
+import { budget, budgetSection } from '@/lib/budget';
+import { monthLabel } from '@/lib/projections';
+import { ChartContainer } from '@/components/ui/chart';
+import { useFinanceData } from '@/composables/useFinanceData';
 
-const props = defineProps<{ projections: Projection[]; transactions: Transaction[]; categories: Category[] }>();
+const props = defineProps<{
+  projections: Projection[];
+  transactions: Transaction[];
+  categories: Category[];
+  focus?: BudgetFocus | null;
+}>();
 const selected = defineModel<Month>({ required: true });
-const emit = defineEmits<{ edit: [projection: Projection] }>();
 
-const KINDS: Record<CategoryKind, string> = { expense: 'Dépenses', income: 'Revenus' };
-const kind = ref<CategoryKind>('expense');
-const view = ref<'chart' | 'calendar' | 'table'>('chart');
+const { settings } = useFinanceData();
 
-// Forecasts and transactions with no category share one pair of bars
-const NONE_KEY = 'none';
-
-// Not by category: the design system's colors, the forecast in gray and
-// what really happened in night
-const SERIES: Series[] = [
-  { key: 'planned', label: 'Prévu', color: 'var(--brand-gray)' },
-  { key: 'actual', label: 'Réalisé', color: 'var(--brand-night)' },
-];
-const config: ChartConfig = Object.fromEntries(SERIES.map((s) => [s.key, { label: s.label, color: s.color }]));
-
-// One row per category of the side shown, with a forecast or an actual amount
-// this month, biggest forecast first (the order of lib/budget.ts): its two
-// bars side by side
-const rows = computed<Row[]>(() => {
-  const byKey = new Map<string, Row>();
-  for (const r of budget(props.projections, props.transactions, props.categories, selected.value)[kind.value]) {
-    const none = r.uncategorized || !props.categories.some((c) => c._id === r.key);
-    const key = none ? NONE_KEY : r.key;
-    let row = byKey.get(key);
-    if (!row)
-      byKey.set(key, (row = { label: none ? 'Sans catégorie' : r.label, t: byKey.size, planned: 0, actual: 0 }));
-    row.planned = Number(row.planned) + r.plannedCents;
-    // A refund bigger than the month's spending would go below zero
-    row.actual = Number(row.actual) + Math.max(0, r.actualCents);
-  }
-  return [...byKey.values()];
+interface Bar {
+  label: string;
+  color: string;
+  plannedCents: number;
+  actualCents: number;
+  over: boolean;
+}
+const bars = computed<Bar[]>(() => {
+  if (props.focus) return [props.focus];
+  const b = budget(props.projections, props.transactions, props.categories, selected.value);
+  const income = budgetSection(b.income).total;
+  const expense = budgetSection(b.expense, settings.value.budgetBufferCents).total;
+  const bar = (label: string, color: string, t: typeof income, canGoOver: boolean) => {
+    const actualCents = Math.max(0, t.actualCents);
+    return { label, color, plannedCents: t.plannedCents, actualCents, over: canGoOver && actualCents > t.plannedCents };
+  };
+  return [
+    bar('Revenus', 'var(--color-emerald-600)', income, false),
+    bar('Dépenses', 'var(--brand-night)', expense, true),
+  ];
 });
+const empty = computed(() => bars.value.every((b) => b.plannedCents === 0 && b.actualCents === 0));
 
-// A little room above the highest bar, so its rounded top is not cut off
-const yDomain = computed<[number, number]>(() => [
-  0,
-  Math.max(1, ...rows.value.flatMap((r) => SERIES.map((s) => Number(r[s.key] ?? 0)))) * 1.1,
-]);
-const y = SERIES.map((s) => (d: Row) => Number(d[s.key] ?? 0));
-// Spending above its forecast turns red
-const color = computed(
-  () => (d: Row, i: number) =>
-    i === 1 && kind.value === 'expense' && Number(d.actual) > Number(d.planned)
-      ? 'var(--destructive)'
-      : SERIES[i]?.color,
+// Each bar in two stacked parts: what happened, then what is still planned.
+// Past its forecast, nothing is left to stack: the forecast (pale) and what
+// happened (red) then stand side by side instead.
+interface Column {
+  label: string;
+  color: string;
+  doneCents: number;
+  leftCents: number;
+  over: boolean;
+}
+const columns = computed<Column[]>(() =>
+  bars.value.flatMap((b) => {
+    const prefix = props.focus ? '' : `${b.label} · `;
+    return b.over
+      ? [
+          { label: `${prefix}prévu`, color: b.color, doneCents: 0, leftCents: b.plannedCents, over: false },
+          { label: `${prefix}réalisé`, color: b.color, doneCents: b.actualCents, leftCents: 0, over: true },
+        ]
+      : [
+          {
+            label: b.label,
+            color: b.color,
+            doneCents: b.actualCents,
+            leftCents: Math.max(0, b.plannedCents - b.actualCents),
+            over: false,
+          },
+        ];
+  }),
 );
-const tickValues = computed(() => rows.value.map((_, i) => i));
-const tickLabel = (i: number) => rows.value[Math.round(i)]?.label ?? '';
+const y = [(c: Column) => c.doneCents, (c: Column) => c.leftCents];
+const color = (c: Column, i: number) =>
+  i === 0 ? (c.over ? 'var(--destructive)' : c.color) : `color-mix(in srgb, ${c.color} 25%, transparent)`;
+const tickValues = computed(() => columns.value.map((_, i) => i));
+const tickLabel = (i: number) => {
+  const label = columns.value[Math.round(i)]?.label ?? '';
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+const config: ChartConfig = {};
 
-const triggers = { [GroupedBar.selectors.bar]: tooltipTemplate(() => config) };
-
-// The budget card's arrows go anywhere: the calendar's too
-const now = currentMonth();
-const calendarMin = addMonths(now, -120);
-const calendarMax = addMonths(now, 120);
+// Unovis leaves a gap between bars whatever their padding: each column gets
+// its share of the plot's width instead (the box minus the fixed margins, the
+// amounts' axis on the left), so they touch
+const MARGIN = { left: 56, right: 8, top: 8, bottom: 28 };
+const box = useTemplateRef('box');
+const { width: boxWidth } = useElementSize(box);
+const barWidth = computed(() =>
+  Math.max(1, Math.floor((boxWidth.value - MARGIN.left - MARGIN.right) / Math.max(1, columns.value.length))),
+);
 </script>
 
 <template>
-  <Tabs v-model="view" class="gap-3">
-    <div class="flex flex-wrap items-center gap-2">
-      <!-- Phone: the title on its own line, then the side (start) and the views
-           (end, icons only) on one line -->
-      <div class="mr-auto max-md:w-full">
-        <h3 class="text-sm font-medium first-letter:uppercase">Prévu vs réalisé · {{ monthLabel(selected) }}</h3>
-        <p v-if="view !== 'calendar'" class="text-sm text-muted-foreground">Par catégorie : prévu, puis réalisé.</p>
-        <p v-else class="text-sm text-muted-foreground">Clique sur une prévision pour la modifier.</p>
-      </div>
-      <OptionSelect v-if="view !== 'calendar'" v-model="kind" :options="KINDS" class="w-32" />
-      <TabsList class="ml-auto">
-        <TabsTrigger value="chart" aria-label="Graphique" title="Graphique">
-          <ChartColumn class="md:hidden" />
-          <span class="max-md:sr-only">Graphique</span>
-        </TabsTrigger>
-        <TabsTrigger value="calendar" aria-label="Calendrier" title="Calendrier">
-          <CalendarDays class="md:hidden" />
-          <span class="max-md:sr-only">Calendrier</span>
-        </TabsTrigger>
-        <TabsTrigger value="table" aria-label="Tableau" title="Tableau">
-          <Table2 class="md:hidden" />
-          <span class="max-md:sr-only">Tableau</span>
-        </TabsTrigger>
-      </TabsList>
+  <section class="flex flex-col gap-3">
+    <div>
+      <h3 class="text-sm font-medium first-letter:uppercase">Prévu vs réalisé · {{ monthLabel(selected) }}</h3>
+      <p class="text-sm text-muted-foreground">Revenus et dépenses du mois.</p>
     </div>
-    <TabsContent value="chart">
-      <p v-if="rows.length === 0" class="py-12 text-center text-sm text-muted-foreground">
-        Aucune {{ kind === 'expense' ? 'dépense' : 'rentrée' }} prévue ni réalisée ce mois-ci.
+    <!-- Switching between the month and a selected card: the old chart fades
+         out and the new one in, instead of Unovis morphing one into the other
+         while the layout changes (the tiles come and go). From one card to
+         another, the same chart stays and Unovis moves its bars -->
+    <Transition
+      mode="out-in"
+      enter-active-class="transition-opacity duration-150"
+      leave-active-class="transition-opacity duration-150"
+      enter-from-class="opacity-0"
+      leave-to-class="opacity-0"
+    >
+      <p v-if="empty" class="py-12 text-center text-sm text-muted-foreground">
+        Rien de prévu ni de réalisé ce mois-ci.
       </p>
-      <ChartContainer v-else :config="config" class="aspect-auto h-auto [&_[data-vis-xy-container]]:h-64">
-        <VisXYContainer :data="rows" :y-domain="yDomain" :margin="{ left: 8, right: 8 }">
-          <VisGroupedBar
-            :x="(_: Row, i: number) => i"
-            :y="y"
-            :color="color"
-            :group-max-width="56"
-            :group-padding="0.25"
-            :bar-padding="0.08"
-            :rounded-corners="4"
-          />
-          <VisAxis
-            type="x"
-            :tick-format="tickLabel"
-            :tick-values="tickValues"
-            tick-text-fit-mode="trim"
-            :tick-text-width="96"
-            tick-text-hide-overlapping
-            :grid-line="false"
-            :tick-line="false"
-          />
-          <VisAxis
-            type="y"
-            :tick-format="amountTickFormat"
-            :num-ticks="4"
-            :grid-line="true"
-            :domain-line="false"
-            :tick-line="false"
-          />
-          <VisTooltip :triggers="triggers" />
-        </VisXYContainer>
-        <ChartLegendContent />
-      </ChartContainer>
-    </TabsContent>
-    <TabsContent value="calendar">
-      <ProjectionCalendar
-        v-model="selected"
-        :projections="projections"
-        :min="calendarMin"
-        :max="calendarMax"
-        @edit="emit('edit', $event)"
-      />
-    </TabsContent>
-    <TabsContent value="table">
-      <SeriesTable :rows="rows" :series="SERIES" bucket-label="Catégorie" />
-    </TabsContent>
-  </Tabs>
+      <!-- Phone: the tiles above the chart. Computer: stacked on its left, so
+         neither stretches over the card's whole width -->
+      <div v-else :key="focus ? 'category' : 'month'" class="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+        <!-- The amounts, one small tile per bar: its color's dot, what happened in
+           big, the forecast under it. None for a selected card: its own card
+           above says it already -->
+        <div v-if="!focus" class="grid shrink-0 grid-cols-2 gap-3 md:w-56 md:grid-cols-1">
+          <div v-for="b in bars" :key="b.label" class="flex flex-col gap-1 rounded-2xl bg-muted/60 p-3">
+            <span class="flex items-center gap-2 text-sm text-muted-foreground">
+              <span
+                class="size-2.5 shrink-0 rounded-full"
+                :style="{ background: b.over ? 'var(--destructive)' : b.color }"
+              />
+              <span class="truncate">{{ b.label }}</span>
+            </span>
+            <span class="truncate text-lg font-semibold tabular-nums" :class="b.over && 'text-destructive'">
+              {{ formatCents(b.actualCents) }}
+            </span>
+            <span class="truncate text-xs text-muted-foreground tabular-nums"
+              >sur {{ formatCents(b.plannedCents) }} prévus</span
+            >
+          </div>
+        </div>
+        <div ref="box" class="min-h-56 min-w-0 md:flex-1">
+          <!-- Drawn once its width is known, so its bars do not grow from nothing -->
+          <ChartContainer
+            v-if="boxWidth > 0"
+            :config="config"
+            class="aspect-auto h-auto [&_[data-vis-xy-container]]:h-56"
+          >
+            <VisXYContainer :data="columns" :margin="MARGIN" :auto-margin="false">
+              <!-- Columns sharing the whole width, side by side with no gap -->
+              <VisStackedBar
+                :x="(_: Column, i: number) => i"
+                :y="y"
+                :color="color"
+                :bar-width="barWidth"
+                :rounded-corners="6"
+              />
+              <VisAxis
+                type="x"
+                :tick-format="tickLabel"
+                :tick-values="tickValues"
+                :grid-line="false"
+                :tick-line="false"
+              />
+              <VisAxis
+                type="y"
+                :tick-format="amountTickFormat"
+                :num-ticks="4"
+                :grid-line="true"
+                :domain-line="false"
+                :tick-line="false"
+              />
+            </VisXYContainer>
+          </ChartContainer>
+        </div>
+      </div>
+    </Transition>
+  </section>
 </template>

@@ -241,7 +241,7 @@ const removeGroup = () => {
                   </Button>
                   <ConfirmDialog
                     :title="`Supprimer la catégorie « ${c.name} » ?`"
-                    description="Ses transactions deviendront sans catégorie. Pour garder l'historique, archive-la plutôt."
+                    description="Ses transactions deviendront sans catégorie. Pour garder l'historique, archivez-la plutôt."
                     @confirm="removeCategory(c)"
                   >
                     <Button size="icon-sm" variant="ghost" :aria-label="`Supprimer ${c.name}`">

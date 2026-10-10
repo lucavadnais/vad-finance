@@ -90,7 +90,7 @@ function save() {
     return;
   }
   if (isTransfer.value && !form.value.transferAccount) {
-    error.value = "Choisis l'autre compte du transfert";
+    error.value = "Choisissez l'autre compte du transfert";
     return;
   }
   run(() =>
@@ -119,7 +119,7 @@ function unlink() {
         <DialogHeader>
           <DialogTitle>Modifier la transaction</DialogTitle>
           <DialogDescription>
-            Avec une catégorie, son type donne le signe : saisis le montant sans signe.
+            Avec une catégorie, son type donne le signe : saisissez le montant sans signe.
           </DialogDescription>
         </DialogHeader>
 

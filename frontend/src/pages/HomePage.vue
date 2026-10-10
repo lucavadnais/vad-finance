@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Month } from '@/lib/projections';
-import { computed, defineAsyncComponent, ref, useTemplateRef, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Eye, EyeOff, Pencil } from '@lucide/vue';
 import { formatCents } from '@/api';
@@ -71,8 +71,6 @@ const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.bala
 // Month shown by the month card and the budget card (its forecasts chart
 // picks it too)
 const projectionMonth = ref<Month>(currentMonth());
-// Forecasts open in the budget card's dialog, from the month card's tiles too
-const budgetCard = useTemplateRef('budgetCard');
 
 // On a phone, one tab at a time, picked in the bottom tab bar: the home (the
 // accounts card taken apart), the spending (the month's spending, the import
@@ -194,10 +192,9 @@ const tabAlerts = computed(() => ({
         :categories="categories"
         class="max-md:order-first"
         :class="onPhone('spending')"
-        @edit="budgetCard?.openDialog($event)"
+        @open-budget="tab = 'budget'"
       />
       <ProjectionMonth
-        ref="budgetCard"
         v-model="projectionMonth"
         :class="onPhone('budget')"
         :projections="projections"

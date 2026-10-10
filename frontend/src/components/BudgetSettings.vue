@@ -45,7 +45,7 @@ async function save() {
   <section class="flex flex-col gap-6">
     <header class="flex flex-col gap-1 pr-6">
       <h2 class="text-lg font-semibold">Budget</h2>
-      <p class="text-sm text-muted-foreground">Comment tes dépenses réelles sont comparées à tes prévisions.</p>
+      <p class="text-sm text-muted-foreground">Comment vos dépenses réelles sont comparées à vos prévisions.</p>
     </header>
 
     <form class="flex max-w-lg flex-col gap-2" @submit.prevent="save">

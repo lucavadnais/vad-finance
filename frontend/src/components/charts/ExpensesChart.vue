@@ -3,7 +3,7 @@
 import type { ChartConfig } from '@/components/ui/chart';
 import type { ChartSelection, Row, Series } from '@/lib/chartData';
 import type { Transaction } from '@/types';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { ChartColumn, ChartPie, Table2 } from '@lucide/vue';
 import { StackedBar } from '@unovis/ts';
 import { VisAxis, VisStackedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
@@ -27,11 +27,19 @@ const props = defineProps<{
   // The clicked segment and its transactions, shown under the chart
   selection: ChartSelection | null;
   selectedTransactions: Transaction[];
+  // The share only, no views to pick (a single month: no bars to compare)
+  shareOnly?: boolean;
+  // Written when there is no spending (e.g. a month to come)
+  emptyMessage?: string;
 }>();
 const emit = defineEmits<{ select: [selection: ChartSelection | null] }>();
 
 // The share of each category first: the most telling view of a period
 const view = ref<'chart' | 'share' | 'table'>('share');
+watch(
+  () => props.shareOnly,
+  (only) => only && (view.value = 'share'),
+);
 
 const config = computed<ChartConfig>(() =>
   Object.fromEntries(props.series.map((s) => [s.key, { label: s.label, color: s.color }])),
@@ -74,7 +82,8 @@ const barEvents = {
 </script>
 
 <template>
-  <!-- Rendered inside the analysis card (DashboardCharts) -->
+  <!-- Rendered inside the analysis (DashboardCharts, phone) and the spending
+       card's "Par catégorie" (SpendInsights) -->
   <!-- Phone: flat, under a line (the card is flat there too) -->
   <section class="max-md:border-t max-md:pt-6">
     <Tabs v-model="view" class="gap-6">
@@ -86,20 +95,21 @@ const barEvents = {
           <CardDescription>
             {{ view === 'share' ? 'Part de chaque catégorie dans les dépenses de la période.' : description }}
           </CardDescription>
-          <!-- Options from the parent for every view (the grouping) -->
-          <div v-if="$slots.filters" class="mt-3"><slot name="filters" /></div>
         </div>
-        <!-- Under the title on a phone: the week / month choice at the start of the
-             line, the views at the end -->
+        <!-- Beside the title on a computer. Under it on a phone: the options
+             on their own line, then the week / month choice at the start of
+             the next one, the views at the end -->
         <CardAction
           stack
-          class="flex flex-wrap gap-2 @md/card-header:justify-end @max-md/card-header:w-full @max-md/card-header:justify-between"
+          class="flex flex-wrap items-center gap-x-4 gap-y-2 @md/card-header:justify-end @max-md/card-header:w-full @max-md/card-header:justify-between"
         >
+          <!-- Options from the parent for every view (the grouping) -->
+          <div v-if="$slots.filters" class="@max-md/card-header:basis-full"><slot name="filters" /></div>
           <!-- Extra controls from the parent (the week / month choice): they
                shape the bars and the table, not the share of the period -->
           <slot v-if="view !== 'share'" name="actions" />
           <!-- Icons only on a phone, so the controls fit on one line; no table there -->
-          <TabsList class="ml-auto">
+          <TabsList v-if="!shareOnly" class="ml-auto">
             <TabsTrigger value="share" aria-label="Répartition" title="Répartition">
               <ChartPie class="md:hidden" />
               <span class="max-md:sr-only">Répartition</span>
@@ -117,7 +127,7 @@ const barEvents = {
       </CardHeader>
       <CardContent class="max-md:px-0">
         <p v-if="rows.length === 0" class="py-12 text-center text-sm text-muted-foreground">
-          Aucune dépense sur cette période.
+          {{ emptyMessage ?? 'Aucune dépense sur cette période.' }}
         </p>
         <template v-else>
           <TabsContent value="chart">

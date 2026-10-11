@@ -3,11 +3,13 @@
 // sentence: red above it, green below, "Comme d'habitude" within a few
 // percent. The home's spending tile, and the spending tab's chart legend
 // (`dot`: the gray dot of the chart's median line before "d'habitude").
+// `previous`: against the period before instead of the usual.
 import { ArrowDown, ArrowUp } from '@lucide/vue';
 
-withDefaults(defineProps<{ percent: number; dot?: boolean; align?: 'start' | 'end' }>(), {
+withDefaults(defineProps<{ percent: number; dot?: boolean; align?: 'start' | 'end'; previous?: boolean }>(), {
   dot: false,
   align: 'start',
+  previous: false,
 });
 </script>
 
@@ -15,7 +17,7 @@ withDefaults(defineProps<{ percent: number; dot?: boolean; align?: 'start' | 'en
   <span class="flex flex-col text-sm" :class="align === 'end' ? 'items-end' : 'items-start'">
     <span v-if="Math.abs(percent) < 3" class="flex items-center gap-1.5 text-muted-foreground">
       <span v-if="dot" class="size-2.5 rounded-full bg-[var(--brand-gray)]" />
-      Comme d'habitude
+      {{ previous ? 'Comme la période précédente' : "Comme d'habitude" }}
     </span>
     <template v-else>
       <span
@@ -28,7 +30,7 @@ withDefaults(defineProps<{ percent: number; dot?: boolean; align?: 'start' | 'en
       </span>
       <span class="flex items-center gap-1.5 text-muted-foreground">
         <span v-if="dot" class="size-2.5 rounded-full bg-[var(--brand-gray)]" />
-        que d'habitude
+        {{ previous ? 'que la période précédente' : "que d'habitude" }}
       </span>
     </template>
   </span>

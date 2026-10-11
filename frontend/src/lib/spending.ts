@@ -24,6 +24,18 @@ export function runningTotal(values: number[]) {
   return values.map((v) => (sum += v));
 }
 
+// Spending over `days` days from `from` (a UTC day), as a running total: the
+// spending card's chart over a period other than a month
+export function runningSpending(transactions: Transaction[], from: Date, days: number) {
+  const out = Array<number>(days).fill(0);
+  for (const t of transactions) {
+    if (!isExpense(t)) continue;
+    const d = Math.floor((Date.parse(t.date) - from.getTime()) / 86_400_000);
+    if (d >= 0 && d < days) out[d]! -= t.amountCents;
+  }
+  return runningTotal(out);
+}
+
 // The three months before `m`, from the first one with any transaction: the
 // median running total of each day of `m` (a shorter month stays at its
 // total), so one unusual month does not pull the line. Null with no history.

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Transactions, newest first, one page at a time (paginated and searched by the backend).
 // Next to the title, an icon per kind of pending review (transfers to link,
-// possible duplicates) opens its dialog.
+// possible duplicates) opens its dialog. `account`: only that account's (the
+// one picked in the accounts' total card), without its logo on each row.
 import type { Account, Category, Transaction } from '@/types';
 import { computed, onMounted, ref, watch } from 'vue';
 import { ChevronLeft, ChevronRight, Copy, Search, TriangleAlert, X } from '@lucide/vue';
@@ -34,6 +35,7 @@ const props = defineProps<{
   categories: Category[];
   // Bumped by the parent whenever transactions may have changed
   version: number;
+  account?: string;
 }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
@@ -44,6 +46,7 @@ const plural = (n: number) => (n > 1 ? 's' : '');
 const transfersLabel = computed(
   () => `${transferCandidates.value.length} transfert${plural(transferCandidates.value.length)} à lier`,
 );
+const accountName = computed(() => props.accounts.find((a) => a._id === props.account)?.name);
 const duplicatesLabel = computed(() => {
   const n = duplicatePairs.value.length;
   return `${n} doublon${plural(n)} possible${plural(n)}`;
@@ -70,7 +73,7 @@ async function load() {
   const id = ++requestId;
   loading.value = true;
   try {
-    const result = await api.getTransactionsPage(page.value, Number(pageSize.value), query.value);
+    const result = await api.getTransactionsPage(page.value, Number(pageSize.value), query.value, props.account);
     if (id !== requestId) return; // a newer request is on its way
     items.value = result.items;
     total.value = result.total;
@@ -96,7 +99,7 @@ watch(page, () => {
   if (syncingPage) syncingPage = false;
   else load();
 });
-watch([pageSize, query], () => {
+watch([pageSize, query, () => props.account], () => {
   // Back to page 1: the page watcher reloads, unless already there
   if (page.value !== 1) page.value = 1;
   else load();
@@ -153,6 +156,9 @@ const range = computed(() => {
       </CardTitle>
       <CardDescription>
         <template v-if="query">{{ total }} résultat(s) pour « {{ query }} ».</template>
+        <template v-else-if="accountName"
+          >{{ total }} transaction(s) de {{ accountName }}, les plus récentes en premier.</template
+        >
         <template v-else>{{ total }} transaction(s), les plus récentes en premier.</template>
       </CardDescription>
       <div class="relative mt-2">
@@ -187,7 +193,7 @@ const range = computed(() => {
         <Table :class="loading && 'opacity-60 transition-opacity'">
           <TableHeader class="sticky top-0 z-10 bg-card max-md:bg-background">
             <TableRow>
-              <TableHead class="w-px pr-0"><span class="sr-only">Compte</span></TableHead>
+              <TableHead v-if="!account" class="w-px pr-0"><span class="sr-only">Compte</span></TableHead>
               <TableHead>Transaction</TableHead>
               <TableHead class="hidden @md:table-cell">Catégorie</TableHead>
               <TableHead class="text-right">Montant</TableHead>
@@ -199,11 +205,12 @@ const range = computed(() => {
               v-for="t in items"
               :key="t._id"
               :transaction="t"
+              :hide-account="!!account"
               @edit="edit(t)"
               @changed="emit('changed')"
               @error="emit('error', $event)"
             />
-            <TableEmpty v-if="items.length === 0 && !loading" :colspan="5">
+            <TableEmpty v-if="items.length === 0 && !loading" :colspan="account ? 4 : 5">
               {{ query ? 'Aucune transaction ne correspond à la recherche' : 'Aucune transaction' }}
             </TableEmpty>
           </TableBody>

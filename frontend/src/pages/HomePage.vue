@@ -1,23 +1,30 @@
 <script setup lang="ts">
-import type { Month } from '@/lib/projections';
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Eye, EyeOff, Pencil } from '@lucide/vue';
+import { ChartLine, Eye, EyeOff, Pencil, Plus, Table2, X } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
+import { useSelectedAccount } from '@/composables/useSelectedAccount';
+import { useSelectedMonth, useSelectedPeriod } from '@/composables/useSelectedMonth';
 import { duplicateKey, useDuplicateReview } from '@/composables/useDuplicateReview';
 import { useTransferReview } from '@/composables/useTransferReview';
+import { TOTAL_SERIES, accountSeries, balanceOverTime, periodStart } from '@/lib/chartData';
+import { addMonths, currentMonth, sameMonth } from '@/lib/projections';
+import { useMediaQuery } from '@vueuse/core';
+import type { Row } from '@/lib/chartData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
-import { currentMonth } from '@/lib/projections';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
 import CsvImport from '@/components/CsvImport.vue';
 import MobileTabBar, { type HomeTab } from '@/components/MobileTabBar.vue';
 import DuplicateDialog from '@/components/DuplicateDialog.vue';
 import MobileHome from '@/components/MobileHome.vue';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TrendChart from '@/components/TrendChart.vue';
+import SeriesTable from '@/components/charts/SeriesTable.vue';
 import ProjectionMonth from '@/components/ProjectionMonth.vue';
 import SpendInsights from '@/components/SpendInsights.vue';
 import TransactionsTable from '@/components/TransactionsTable.vue';
@@ -66,11 +73,53 @@ watch(duplicateReview.open, (open) => {
 // The eye next to the total hides every amount in the app
 const { amountsHidden, toggle: toggleAmounts } = useAmountsHidden();
 
-const totalCents = computed(() => accounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
+// An account clicked in the card shows only it: its balance and curve, its
+// spending in the spending card, its transactions (useSelectedAccount).
+// Clicked again, or the cross by its name, back to all of them
+const selectedId = useSelectedAccount();
+const selected = computed(() => accounts.value.find((a) => a._id === selectedId.value));
+const shownAccounts = computed(() => (selected.value ? [selected.value] : accounts.value));
+const toggleAccount = (id: string) => (selectedId.value = selectedId.value === id ? 'all' : id);
+// Deleted from its dialog
+watch(selected, (a) => {
+  if (!a && selectedId.value !== 'all' && accounts.value.length > 0) selectedId.value = 'all';
+});
 
-// Month shown by the month card and the budget card (its forecasts chart
-// picks it too)
-const projectionMonth = ref<Month>(currentMonth());
+const totalCents = computed(() => shownAccounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
+// Under it, how it moved over the period of the page's header, as a curve or
+// a table. "Mois par mois": over the month picked beside it (a past one up to
+// its last day, nothing for one to come)
+const period = useSelectedPeriod();
+const projectionMonth = useSelectedMonth();
+const monthStart = (m: { year: number; month: number }) => new Date(Date.UTC(m.year, m.month, 1));
+const balanceRows = computed(() => {
+  const m = projectionMonth.value;
+  const byMonth = period.value === 'month';
+  const now = currentMonth();
+  if (byMonth && monthStart(m) > monthStart(now)) return [];
+  const end = byMonth && !sameMonth(m, now) ? monthStart(addMonths(m, 1)) : null;
+  return balanceOverTime(
+    transactions.value.filter(
+      (t) => (!selected.value || t.account?._id === selected.value._id) && (!end || new Date(t.date) < end),
+    ),
+    shownAccounts.value,
+    accountSeries(shownAccounts.value),
+    byMonth ? monthStart(m) : periodStart(period.value),
+    end ? new Date(end.getTime() - 1) : undefined,
+  );
+});
+const balanceTimes = computed(() => balanceRows.value.map((r) => r.t));
+const balanceTotals = computed(() => balanceRows.value.map((r) => Number(r.total ?? 0)));
+const balanceChange = computed(() => (balanceTotals.value.at(-1) ?? 0) - (balanceTotals.value[0] ?? 0));
+const formatRowDate = (row: Row) => new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC' });
+
+// The budget is by month: with another period than "Mois par mois" in the
+// header (computer), the current one. A phone picks its month in the tab's bar
+const phone = useMediaQuery('(max-width: 767px)');
+const budgetMonth = computed({
+  get: () => (phone.value || period.value === 'month' ? projectionMonth.value : currentMonth()),
+  set: (m) => (projectionMonth.value = m),
+});
 
 // On a phone, one tab at a time, picked in the bottom tab bar: the home (the
 // accounts card taken apart), the spending (the month's spending, the import
@@ -113,15 +162,26 @@ const tabAlerts = computed(() => ({
       />
 
       <!-- The total of the accounts is the page's headline figure: the biggest
-           number, above the budget's net, on the night surface -->
+           number, above the budget's net, on the night surface. It holds the
+           balance's curve too (the analysis keeps the spending) -->
       <!-- Phone: taken apart in the home tab (MobileHome) -->
       <Card class="surface-night max-md:hidden">
         <CardHeader>
-          <CardDescription class="flex items-center gap-1">
-            Total des comptes
+          <!-- Titled like the other cards -->
+          <CardTitle class="flex min-h-8 items-center text-lg">Comptes</CardTitle>
+          <!-- The whole width to itself: the biggest figure of the page, the
+               eye that hides every amount beside it -->
+          <p class="mt-2 flex min-w-0 items-center gap-2">
+            <span
+              class="truncate text-[clamp(2.5rem,4vw,3.75rem)] leading-none font-semibold tracking-tight tabular-nums"
+              :class="totalCents < 0 && 'text-destructive'"
+            >
+              {{ formatCents(totalCents, selected?.currency) }}
+            </span>
             <Button
-              size="icon-xs"
+              size="icon-sm"
               variant="ghost"
+              class="shrink-0 text-muted-foreground"
               :aria-label="amountsHidden ? 'Afficher les montants' : 'Masquer les montants'"
               :title="amountsHidden ? 'Afficher les montants' : 'Masquer les montants'"
               :aria-pressed="amountsHidden"
@@ -130,25 +190,89 @@ const tabAlerts = computed(() => ({
               <EyeOff v-if="amountsHidden" />
               <Eye v-else />
             </Button>
-          </CardDescription>
-          <CardTitle class="text-4xl font-semibold tabular-nums" :class="totalCents < 0 && 'text-destructive'">
-            {{ formatCents(totalCents) }}
-          </CardTitle>
-          <CardAction>
-            <AccountForm @created="refresh" @error="setError" />
-          </CardAction>
+          </p>
+          <!-- An account picked: a chip under the figure, its cross back to all -->
+          <span
+            v-if="selected"
+            class="mt-1 flex w-fit max-w-full items-center gap-1.5 rounded-full bg-white/10 py-0.5 pr-0.5 pl-2.5 text-sm font-medium"
+          >
+            <span class="truncate">{{ selected.name }}</span>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              class="rounded-full"
+              aria-label="Tous les comptes"
+              title="Tous les comptes"
+              @click="selectedId = 'all'"
+            >
+              <X />
+            </Button>
+          </span>
         </CardHeader>
-        <CardContent>
+        <CardContent class="flex flex-col gap-4">
+          <!-- How the total moved over the period: the change, the period and
+               the view, then the curve edge to edge in the card (or the table) -->
+          <Tabs v-if="balanceRows.length > 1" default-value="chart" class="gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <p class="mr-auto text-sm text-muted-foreground">
+                <span
+                  class="font-medium tabular-nums"
+                  :class="balanceChange < 0 ? 'text-destructive' : 'text-emerald-600'"
+                  >{{ balanceChange > 0 && !amountsHidden ? '+' : '' }}{{ formatCents(balanceChange) }}</span
+                >
+                sur la période
+              </p>
+              <TabsList>
+                <TabsTrigger value="chart" aria-label="Graphique" title="Graphique"><ChartLine /></TabsTrigger>
+                <TabsTrigger value="table" aria-label="Tableau" title="Tableau"><Table2 /></TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value="chart">
+              <TrendChart
+                :values="balanceTotals"
+                :x="balanceTimes"
+                :height="200"
+                main-label="Solde"
+                class="-mx-6 [--chart-gutter:24px]"
+              />
+            </TabsContent>
+            <TabsContent value="table">
+              <SeriesTable
+                :rows="[...balanceRows].reverse()"
+                :series="[TOTAL_SERIES]"
+                bucket-label="Date"
+                :format-bucket="formatRowDate"
+              />
+            </TabsContent>
+          </Tabs>
           <p v-if="accounts.length === 0" class="text-sm text-muted-foreground">Aucun compte pour l'instant.</p>
-          <ul v-else class="flex flex-col gap-2">
-            <li v-for="a in accounts" :key="a._id" class="flex items-center gap-2 text-sm">
-              <AccountLogo :account="a" />
-              <!-- On mobile, the type wraps under the name rather than squeezing it -->
-              <span class="flex min-w-0 flex-wrap gap-x-2">
-                <span class="font-medium">{{ a.name }}</span>
-                <span class="text-muted-foreground">({{ ACCOUNT_TYPES[a.type] ?? a.type }})</span>
-              </span>
-              <span class="ml-auto tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
+          <!-- Each account picks itself (or back to all, when it is the one picked);
+               the others dim while one is -->
+          <ul v-else class="-mx-2 flex flex-col gap-1">
+            <li
+              v-for="a in accounts"
+              :key="a._id"
+              class="flex items-center gap-1 rounded-lg pr-1 text-sm transition-colors"
+              :class="[
+                a._id === selectedId ? 'bg-white/10' : 'hover:bg-white/5',
+                selected && a !== selected && 'opacity-60',
+              ]"
+            >
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                :aria-pressed="a._id === selectedId"
+                :title="a._id === selectedId ? 'Afficher tous les comptes' : `N'afficher que ${a.name}`"
+                @click="toggleAccount(a._id)"
+              >
+                <AccountLogo :account="a" />
+                <!-- On mobile, the type wraps under the name rather than squeezing it -->
+                <span class="flex min-w-0 flex-wrap gap-x-2">
+                  <span class="font-medium">{{ a.name }}</span>
+                  <span class="text-muted-foreground">({{ ACCOUNT_TYPES[a.type] ?? a.type }})</span>
+                </span>
+                <span class="ml-auto tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
+              </button>
               <AccountForm :account="a" :accounts="accounts" @changed="refresh" @error="setError">
                 <Button size="icon-sm" variant="ghost" :aria-label="`Modifier ${a.name}`" :title="`Modifier ${a.name}`">
                   <Pencil />
@@ -156,6 +280,16 @@ const tabAlerts = computed(() => ({
               </AccountForm>
             </li>
           </ul>
+          <!-- Adding one: under the accounts, dashed, as on the phone's home -->
+          <AccountForm @created="refresh" @error="setError">
+            <button
+              type="button"
+              class="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/40 p-3 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted/50"
+            >
+              Ajouter un compte
+              <Plus class="size-5 shrink-0" />
+            </button>
+          </AccountForm>
         </CardContent>
       </Card>
 
@@ -178,6 +312,7 @@ const tabAlerts = computed(() => ({
         :accounts="accounts"
         :categories="categories"
         :version="dataVersion"
+        :account="selected?._id"
         @changed="refresh"
         @error="setError"
       />
@@ -195,7 +330,7 @@ const tabAlerts = computed(() => ({
         @open-budget="tab = 'budget'"
       />
       <ProjectionMonth
-        v-model="projectionMonth"
+        v-model="budgetMonth"
         :class="onPhone('budget')"
         :projections="projections"
         :transactions="transactions"
@@ -204,7 +339,10 @@ const tabAlerts = computed(() => ({
         @error="setError"
       />
 
+      <!-- Phone only: from a tablet up, the balance is in the accounts' total
+           card and the spending by category in the spending card -->
       <DashboardCharts
+        class="md:hidden"
         :class="onPhone('analysis')"
         :transactions="transactions"
         :accounts="accounts"

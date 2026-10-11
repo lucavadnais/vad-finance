@@ -86,9 +86,9 @@ export const api = {
   // Every transaction (charts, analysis)
   getTransactions: () => request<Transaction[]>('/transactions'),
   // One page for the transactions table (page starts at 1)
-  getTransactionsPage: (page: number, pageSize: number, q = '') =>
+  getTransactionsPage: (page: number, pageSize: number, q = '', account?: string) =>
     request<TransactionPage>(
-      `/transactions?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), q })}`,
+      `/transactions?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), q, ...(account && { account }) })}`,
     ),
   createTransaction: (body: TransactionInput) => request<Transaction>('/transactions', { method: 'POST', body }),
   updateTransaction: (id: string, body: TransactionInput) =>

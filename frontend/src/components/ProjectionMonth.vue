@@ -3,7 +3,7 @@
 // category (BudgetOverview), the forecasts vs actual chart (of the selected
 // card, or the month's income and spending); or, picked at the top instead,
 // the forecasts on a calendar. "Gérer les prévisions" lists them all, to edit
-// or delete. The month is shared with the month card (SpendInsights).
+// or delete. The month is the home's (useSelectedMonth).
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { addMonths, currentMonth, monthLabel } from '@/lib/projections';
@@ -68,10 +68,13 @@ async function remove(p: Projection) {
 <template>
   <!-- A card on a computer; flat in its tab on a phone, like the others -->
   <Card class="max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:py-0 max-md:shadow-none">
-    <!-- Computer: the title (the actions are by the categories' cards). The
-         month is set by the month card above (SpendInsights) -->
+    <!-- Computer: the title and its month (the actions are by the categories'
+         cards). The month is picked in the page's header (App.vue) -->
     <CardHeader class="max-md:hidden">
-      <CardTitle class="flex min-h-8 items-center text-lg">Budget</CardTitle>
+      <CardTitle class="flex min-h-8 min-w-0 items-center gap-2 text-lg">
+        Budget
+        <span class="truncate font-normal text-muted-foreground first-letter:uppercase">· {{ monthLabel(month) }}</span>
+      </CardTitle>
     </CardHeader>
     <!-- Phone: the page's bar, with the month -->
     <PageBar v-model:month="month" title="Budget" class="md:hidden" />

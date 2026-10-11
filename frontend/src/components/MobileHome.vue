@@ -12,7 +12,7 @@ import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { budget, estimatedMonth } from '@/lib/budget';
-import { accountSeries, balanceOverTime } from '@/lib/chartData';
+import { recentBalance } from '@/lib/chartData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { currentMonth, monthLabel } from '@/lib/projections';
 import { dailySpending, medianRunningTotal, runningTotal, vsUsualPercent } from '@/lib/spending';
@@ -39,13 +39,9 @@ const monthName = monthLabel(month).replace(/ \d+$/, '');
 
 // Under the total, opening the analysis (whose top is the same balance and
 // curve): the total balance over the last 30 days, and how much it moved
-const balance = computed(() => {
-  const from = new Date(Date.now() - 30 * 86_400_000);
-  return balanceOverTime(props.transactions, props.accounts, accountSeries(props.accounts), from).map((r) =>
-    Number(r.total),
-  );
-});
-const balanceChange = computed(() => (balance.value.at(-1) ?? 0) - (balance.value[0] ?? 0));
+const recent = computed(() => recentBalance(props.transactions, props.accounts));
+const balance = computed(() => recent.value.values);
+const balanceChange = computed(() => recent.value.changeCents);
 
 // Spending tile, opening its tab: spent so far this month, against the usual
 // spending by the same day (the median of the three months before, the gray
@@ -119,7 +115,7 @@ const netShare = computed(() => {
       <Sparkline
         :values="balance"
         :color="balanceChange < 0 ? 'var(--destructive)' : 'var(--color-emerald-600)'"
-        class="-mx-4 mt-2 h-20 w-[calc(100%+2rem)]!"
+        class="-mx-4 mt-2 h-28 w-[calc(100%+2rem)]!"
       />
     </section>
 

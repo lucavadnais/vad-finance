@@ -159,6 +159,13 @@
   --border: var(--brand-surface);
   --input: rgb(255 255 255 / 15%);
   --ring: var(--brand-gray);
+  /* Charts and tables in it (the balance's curve): the accent line turns
+     white, the tooltip and the sticky table header go dark like the card,
+     the dots' rings too */
+  --brand-accent: #ffffff;
+  --background: var(--brand-night);
+  --popover: var(--brand-surface);
+  --popover-foreground: #ffffff;
 }
 
 /* Chart series: categorical slots in their validated order (light / dark

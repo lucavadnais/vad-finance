@@ -14,6 +14,17 @@ export const PERIODS: Record<Period, string> = {
   all: 'Tout',
 };
 
+// The analysis' periods, over several months: this week and one month at a
+// time are the spending tab's
+export type TrendPeriod = Exclude<Period, 'week' | 'month'>;
+export const TREND_PERIODS: Record<TrendPeriod, string> = {
+  '3m': PERIODS['3m'],
+  '6m': PERIODS['6m'],
+  '12m': PERIODS['12m'],
+  year: PERIODS.year,
+  all: PERIODS.all,
+};
+
 export interface Series {
   key: string;
   label: string;
@@ -228,6 +239,14 @@ export const TOTAL_SERIES: Series = { key: 'total', label: 'Total', color: 'var(
 
 // Balance after each day with transactions, per account and in total. Starts
 // at the balance on the first day of the period and ends today.
+// The total balance over the last `days` days, and how much it moved: the
+// curve under the total of the accounts (the phone's home, the computer's card)
+export function recentBalance(transactions: Transaction[], accounts: Account[], days = 30) {
+  const from = new Date(Date.now() - days * 86_400_000);
+  const values = balanceOverTime(transactions, accounts, accountSeries(accounts), from).map((r) => Number(r.total));
+  return { values, changeCents: (values.at(-1) ?? 0) - (values[0] ?? 0) };
+}
+
 export function balanceOverTime(
   transactions: Transaction[],
   accounts: Account[],

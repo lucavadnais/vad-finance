@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import { connectDb } from './db.js';
@@ -25,6 +27,29 @@ app.use('/api/transfers', transfersRouter);
 app.use('/api/duplicates', duplicatesRouter);
 app.use('/api/projections', projectionsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api', (req, res) => res.status(404).json({ error: 'Route introuvable' }));
+
+// The built frontend (npm run build), when there is one: a single server for
+// the app and its API. In dev, Vite serves the frontend on its own port
+const dist = path.resolve(import.meta.dirname, '../../frontend/dist');
+if (fs.existsSync(dist)) {
+  app.use(
+    express.static(dist, {
+      // Hashed file names change with their content: cached for good. The rest
+      // (index.html, sw.js, manifest) is checked at each visit, so a new
+      // build reaches the installed app
+      setHeaders: (res, file) =>
+        res.setHeader(
+          'Cache-Control',
+          file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
+        ),
+    }),
+  );
+  // Every other address is a page of the app (its router picks it)
+  app.get(/.*/, (req, res) =>
+    res.sendFile(path.join(dist, 'index.html'), { headers: { 'Cache-Control': 'no-cache' } }),
+  );
+}
 
 // Express 5 forwards rejected promises from async handlers here.
 // It spots error handlers by their 4 parameters, so `next` must stay

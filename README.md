@@ -54,6 +54,19 @@ docker compose down            # arrêter
 docker compose down -v         # arrêter ET effacer les données MongoDB
 ```
 
+### Installer comme application (webapp)
+
+Le frontend est une PWA (`vite-plugin-pwa`) : manifeste, icônes générées depuis `frontend/public/logo.svg` (voir `frontend/pwa-assets.config.ts`) et service worker qui met en cache l'application, jamais les données de l'API. Le service worker n'existe que dans le build. Dès que `frontend/dist` existe, le backend sert l'application avec l'API sur un seul port. Celui que le conteneur démarre suffit, sans autre commande :
+
+```bash
+npm run build    # compile le frontend dans frontend/dist → http://localhost:3000
+```
+
+Relancez `npm run build` pour mettre à jour l'application installée. En développement, utilisez toujours http://localhost:5173. `npm start` lance le backend sans nodemon, pour une machine qui ne fait pas tourner `npm run dev`.
+
+- **iPhone** : Safari → Partager → « Sur l'écran d'accueil ».
+- **Android / ordinateur** : Chrome → « Installer l'application ». Chrome exige HTTPS (ou `localhost`) ; depuis un téléphone sur le réseau local en HTTP, seul l'ajout à l'écran d'accueil d'iOS fonctionne. Pour un accès HTTPS limité à vos appareils, placez le port 3000 derrière [Tailscale](https://tailscale.com/kb/1312/serve) (`tailscale serve 3000`). L'application n'a pas encore d'authentification : ne l'exposez pas publiquement sur Internet.
+
 Les composants shadcn-vue sont générés dans `frontend/src/components/ui/` et s'importent via l'alias `@` (`import { Button } from '@/components/ui/button'`).
 
 ## Structure

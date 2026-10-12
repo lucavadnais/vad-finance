@@ -3,6 +3,7 @@
 // a transfer when it has a `transferAccount` (the other side); once both sides
 // are in the app they also point to each other through `transferPeer`.
 // Transfers carry no category: they are neither income nor spending.
+import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
 
 // Largest gap between the two sides of a transfer (the card payment often
@@ -12,17 +13,19 @@ const DAY_MS = 86_400_000;
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
-// Pairs that look like the two sides of one transfer: same amount with opposite
-// signs, two different accounts, at most MAX_DAYS_APART apart. Only
-// uncategorized, unlinked and not dismissed transactions are considered. Each
-// transaction appears in at most one pair, closest dates first.
-export async function findTransferCandidates() {
+// Pairs of the user's transactions that look like the two sides of one
+// transfer: same amount with opposite signs, two different accounts, at most
+// MAX_DAYS_APART apart. Only uncategorized, unlinked and not dismissed
+// transactions are considered. Each transaction appears in at most one pair,
+// closest dates first.
+export async function findTransferCandidates(user) {
   const pool = await Transaction.find({
+    user,
     transferPeer: null,
     transferIgnored: { $ne: true },
     category: null,
   })
-    .populate('account', 'name')
+    .populate({ path: 'account', select: 'name', match: { user } })
     .lean();
 
   const incoming = new Map(); // amount -> positive transactions
@@ -55,9 +58,12 @@ export async function findTransferCandidates() {
   });
 }
 
-// Links two existing transactions as the two sides of one transfer
-export async function linkTransfer(idA, idB) {
-  const [a, b] = await Promise.all([Transaction.findById(idA), Transaction.findById(idB)]);
+// Links two existing transactions of the user as the two sides of one transfer
+export async function linkTransfer(user, idA, idB) {
+  const [a, b] = await Promise.all([
+    Transaction.findOne({ _id: idA, user }),
+    Transaction.findOne({ _id: idB, user }),
+  ]);
   if (!a || !b) throw httpError(404, 'Transaction not found');
   if (a.amountCents !== -b.amountCents || a.amountCents === 0) {
     throw httpError(400, 'Les montants doivent être opposés');
@@ -71,8 +77,8 @@ export async function linkTransfer(idA, idB) {
   }
 
   await Promise.all([
-    Transaction.updateOne({ _id: a._id }, { category: null, transferAccount: b.account, transferPeer: b._id }),
-    Transaction.updateOne({ _id: b._id }, { category: null, transferAccount: a.account, transferPeer: a._id }),
+    Transaction.updateOne({ _id: a._id, user }, { category: null, transferAccount: b.account, transferPeer: b._id }),
+    Transaction.updateOne({ _id: b._id, user }, { category: null, transferAccount: a.account, transferPeer: a._id }),
   ]);
 }
 
@@ -106,6 +112,7 @@ export async function autoLinkTransfers(transactions) {
     if (!filter) continue;
 
     const candidates = await Transaction.find({
+      user: t.user,
       ...filter,
       amountCents: -t.amountCents,
       transferPeer: null,
@@ -116,44 +123,48 @@ export async function autoLinkTransfers(transactions) {
       .sort((a, b) => Math.abs(a.date - t.date) - Math.abs(b.date - t.date))[0];
     if (!match) continue;
     used.add(String(match._id));
-    await linkTransfer(t._id, match._id);
+    await linkTransfer(t.user, t._id, match._id);
     linked++;
   }
   return linked;
 }
 
-// Creates both sides of a transfer at once (manual entry)
-export async function createTransfer({ from, to, date, description = '', amountCents }) {
+// Creates both sides of a transfer between two accounts of the user (manual entry)
+export async function createTransfer(user, { from, to, date, description = '', amountCents }) {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw httpError(400, 'Le montant doit être positif');
   }
   if (!from || !to || String(from) === String(to)) {
     throw httpError(400, 'Choisissez deux comptes différents');
   }
+  await Account.checkOwned(user, from, to);
   const [out, inc] = await Transaction.create([
-    { account: from, date, description, amountCents: -amountCents, transferAccount: to },
-    { account: to, date, description, amountCents, transferAccount: from },
+    { user, account: from, date, description, amountCents: -amountCents, transferAccount: to },
+    { user, account: to, date, description, amountCents, transferAccount: from },
   ]);
   await Promise.all([
-    Transaction.updateOne({ _id: out._id }, { transferPeer: inc._id }),
-    Transaction.updateOne({ _id: inc._id }, { transferPeer: out._id }),
+    Transaction.updateOne({ _id: out._id, user }, { transferPeer: inc._id }),
+    Transaction.updateOne({ _id: inc._id, user }, { transferPeer: out._id }),
   ]);
   return [out, inc];
 }
 
 // Breaks the link on both sides (each keeps its other account)
 export async function unlinkTransfer(transaction) {
+  const { user } = transaction;
   if (transaction.transferPeer) {
-    await Transaction.updateOne({ _id: transaction.transferPeer }, { transferPeer: null });
+    await Transaction.updateOne({ _id: transaction.transferPeer, user }, { transferPeer: null });
   }
-  await Transaction.updateOne({ _id: transaction._id }, { transferPeer: null });
+  await Transaction.updateOne({ _id: transaction._id, user }, { transferPeer: null });
 }
 
 // Keeps transfer fields consistent after a create or an edit: a transfer has
 // no category, and a transaction that is no longer a transfer loses its link
 export async function syncTransferAfterUpdate(transaction) {
   if (transaction.transferAccount) {
-    if (transaction.category) await Transaction.updateOne({ _id: transaction._id }, { category: null });
+    if (transaction.category) {
+      await Transaction.updateOne({ _id: transaction._id, user: transaction.user }, { category: null });
+    }
   } else if (transaction.transferPeer) {
     await unlinkTransfer(transaction);
   }

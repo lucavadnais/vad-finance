@@ -4,12 +4,12 @@ import { getSettings } from '../models/Setting.js';
 const router = Router();
 
 router.get('/', async (req, res) => {
-  res.json(await getSettings());
+  res.json(await getSettings(req.userId));
 });
 
 // Body: the fields to change
 router.put('/', async (req, res) => {
-  const settings = await getSettings();
+  const settings = await getSettings(req.userId);
   if (req.body.budgetBufferCents !== undefined) settings.budgetBufferCents = req.body.budgetBufferCents;
   if (req.body.chartAxes !== undefined) settings.chartAxes = req.body.chartAxes;
   await settings.save();

@@ -1,5 +1,14 @@
 // Shapes returned by the backend API
 
+// The signed-in user (GET /auth/me), from their Google account
+export interface User {
+  _id: string;
+  email: string;
+  name: string;
+  // URL of the Google profile picture
+  picture: string | null;
+}
+
 export type AccountType = 'checking' | 'savings' | 'credit' | 'investment' | 'cash';
 export type CategoryKind = 'income' | 'expense';
 

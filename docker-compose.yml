@@ -27,6 +27,9 @@ services:
       PORT: 3000
       MONGO_URL: mongodb://mongo:27017/finance
       API_TARGET: http://localhost:3000
+      # OAuth client id for "Se connecter avec Google", from the .env file next
+      # to this one (GOOGLE_CLIENT_ID=...apps.googleusercontent.com), see README
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       # Keep Claude Code settings and login in the claude-config volume
       CLAUDE_CONFIG_DIR: /root/.claude
     # Install/refresh dependencies on every start, then run both dev servers

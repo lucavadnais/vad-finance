@@ -7,7 +7,7 @@ import CategoryGroup from '../models/CategoryGroup.js';
 const router = Router();
 
 router.get('/', async (req, res) => {
-  res.json(await CategoryGroup.find().sort({ name: 1 }).collation(FRENCH));
+  res.json(await CategoryGroup.find({ user: req.userId }).sort({ name: 1 }).collation(FRENCH));
 });
 
 const editable = ({ name, color }) =>
@@ -16,16 +16,18 @@ const editable = ({ name, color }) =>
 // Without a color, one is drawn among the least used
 router.post('/', async (req, res) => {
   const fields = editable(req.body);
-  if (!fields.color) fields.color = pickColor(await usedColors());
-  const group = await CategoryGroup.create(fields);
+  if (!fields.color) fields.color = pickColor(await usedColors(req.userId));
+  const group = await CategoryGroup.create({ ...fields, user: req.userId });
   res.status(201).json(group);
 });
 
 // Rename or recolor ({ color: null } draws a new color)
 router.put('/:id', async (req, res) => {
   const fields = editable(req.body);
-  if (fields.color === null || fields.color === '') fields.color = pickColor(await usedColors(req.params.id));
-  const group = await CategoryGroup.findByIdAndUpdate(req.params.id, fields, {
+  if (fields.color === null || fields.color === '') {
+    fields.color = pickColor(await usedColors(req.userId, req.params.id));
+  }
+  const group = await CategoryGroup.findOneAndUpdate({ _id: req.params.id, user: req.userId }, fields, {
     new: true,
     runValidators: true,
   });
@@ -35,9 +37,9 @@ router.put('/:id', async (req, res) => {
 
 // Its categories stay, without a group
 router.delete('/:id', async (req, res) => {
-  const group = await CategoryGroup.findByIdAndDelete(req.params.id);
+  const group = await CategoryGroup.findOneAndDelete({ _id: req.params.id, user: req.userId });
   if (!group) return res.status(404).json({ error: 'Group not found' });
-  await Category.updateMany({ group: group._id }, { group: null });
+  await Category.updateMany({ user: req.userId, group: group._id }, { group: null });
   res.status(204).end();
 });
 

@@ -17,6 +17,7 @@ import type {
   TransactionPage,
   TransferCandidate,
   TransferInput,
+  User,
 } from './types';
 import { computed } from 'vue';
 import { amountsHidden } from './composables/useAmountsHidden';
@@ -25,6 +26,13 @@ interface RequestOptions {
   method?: string;
   headers?: Record<string, string>;
   body?: unknown;
+}
+
+// Called when the API answers 401 outside /auth: the session ended (useAuth
+// then shows the sign-in page)
+let onUnauthorized = () => {};
+export function setUnauthorizedHandler(handler: () => void) {
+  onUnauthorized = handler;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -36,6 +44,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body: body instanceof Blob ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized();
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `HTTP ${res.status}`);
   }
@@ -43,6 +52,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const api = {
+  getAuthConfig: () => request<{ googleClientId: string | null }>('/auth/config'),
+  // 401 when nobody is signed in
+  getMe: () => request<User>('/auth/me'),
+  // `credential`: the ID token Google's sign-in button hands the page
+  signInWithGoogle: (credential: string) => request<User>('/auth/google', { method: 'POST', body: { credential } }),
+  signOut: () => request<null>('/auth/logout', { method: 'POST' }),
   getAccounts: () => request<Account[]>('/accounts'),
   createAccount: (body: AccountInput) => request<Account>('/accounts', { method: 'POST', body }),
   updateAccount: (id: string, body: AccountInput) => request<Account>(`/accounts/${id}`, { method: 'PUT', body }),

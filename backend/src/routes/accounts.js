@@ -23,8 +23,9 @@ function editable(body) {
 
 // List accounts with their current balance
 router.get('/', async (req, res) => {
-  const accounts = await Account.find().sort({ name: 1 }).collation(FRENCH).lean();
+  const accounts = await Account.find({ user: req.userId }).sort({ name: 1 }).collation(FRENCH).lean();
   const totals = await Transaction.aggregate([
+    { $match: { user: req.userId } },
     { $group: { _id: '$account', totalCents: { $sum: '$amountCents' }, count: { $sum: 1 } } },
   ]);
   const totalByAccount = new Map(totals.map((t) => [String(t._id), t]));
@@ -42,12 +43,12 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const account = await Account.create({ ...editable(req.body), currency: req.body.currency });
+  const account = await Account.create({ ...editable(req.body), currency: req.body.currency, user: req.userId });
   res.status(201).json(account);
 });
 
 router.put('/:id', async (req, res) => {
-  const account = await Account.findByIdAndUpdate(req.params.id, editable(req.body), {
+  const account = await Account.findOneAndUpdate({ _id: req.params.id, user: req.userId }, editable(req.body), {
     new: true,
     runValidators: true,
   });
@@ -64,8 +65,8 @@ router.put('/:id/logo', express.raw({ type: () => true, limit: LOGO_MAX_BYTES })
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     return res.status(400).json({ error: 'Image vide' });
   }
-  const account = await Account.findByIdAndUpdate(
-    req.params.id,
+  const account = await Account.findOneAndUpdate(
+    { _id: req.params.id, user: req.userId },
     { logo: { data: req.body, contentType }, logoUpdatedAt: new Date() },
     { new: true },
   );
@@ -74,8 +75,8 @@ router.put('/:id/logo', express.raw({ type: () => true, limit: LOGO_MAX_BYTES })
 });
 
 router.delete('/:id/logo', async (req, res) => {
-  const account = await Account.findByIdAndUpdate(
-    req.params.id,
+  const account = await Account.findOneAndUpdate(
+    { _id: req.params.id, user: req.userId },
     { $unset: { logo: 1 }, logoUpdatedAt: null },
     { new: true },
   );
@@ -85,7 +86,7 @@ router.delete('/:id/logo', async (req, res) => {
 
 // The URL carries ?v=<logoUpdatedAt>, so the image can be cached for good
 router.get('/:id/logo', async (req, res) => {
-  const account = await Account.findById(req.params.id).select('+logo');
+  const account = await Account.findOne({ _id: req.params.id, user: req.userId }).select('+logo');
   if (!account?.logo?.data) return res.status(404).json({ error: 'Logo not found' });
   res.set({
     'Content-Type': account.logo.contentType,
@@ -100,9 +101,12 @@ router.get('/:id/logo', async (req, res) => {
 // from an account to itself: linked pairs cancel out and are deleted, a lone
 // side becomes an ordinary transaction. Transfers with other accounts now
 // point to `to`. Run before deleting `from`, so a failure leaves it in place.
+// Both accounts belong to the same user.
 async function moveTransactions(from, to) {
+  const { user } = from;
   const between = await Transaction.find(
     {
+      user,
       $or: [
         { account: from._id, transferAccount: to._id },
         { account: to._id, transferAccount: from._id },
@@ -112,44 +116,48 @@ async function moveTransactions(from, to) {
   ).lean();
   const ids = new Set(between.map((t) => String(t._id)));
   const paired = between.filter((t) => t.transferPeer && ids.has(String(t.transferPeer))).map((t) => t._id);
-  await Transaction.deleteMany({ _id: { $in: paired } });
+  await Transaction.deleteMany({ user, _id: { $in: paired } });
   await Transaction.updateMany(
-    { _id: { $in: between.map((t) => t._id) } },
+    { user, _id: { $in: between.map((t) => t._id) } },
     { transferAccount: null, transferPeer: null },
   );
 
-  await Transaction.updateMany({ transferAccount: from._id }, { transferAccount: to._id });
-  await Transaction.updateMany({ account: from._id }, { account: to._id });
+  await Transaction.updateMany({ user, transferAccount: from._id }, { transferAccount: to._id });
+  await Transaction.updateMany({ user, account: from._id }, { account: to._id });
 }
 
 // Deletes the account. Its transactions are deleted with it, unless
 // ?moveTo=<account id> moves them there (&moveInitialBalance=1 also adds its
 // initial balance to that account's, so the total stays the same).
 router.delete('/:id', async (req, res) => {
-  const account = await Account.findById(req.params.id);
+  const user = req.userId;
+  const account = await Account.findOne({ _id: req.params.id, user });
   if (!account) return res.status(404).json({ error: 'Account not found' });
 
   if (req.query.moveTo) {
-    const target = await Account.findById(req.query.moveTo);
+    const target = await Account.findOne({ _id: req.query.moveTo, user });
     if (!target) throw httpError(404, 'Compte de destination introuvable');
     if (target._id.equals(account._id)) throw httpError(400, 'Choisissez un autre compte que celui à supprimer');
     if (target.currency !== account.currency) {
       throw httpError(400, `Le compte de destination doit être en ${account.currency}`);
     }
     await moveTransactions(account, target);
-    await account.deleteOne();
+    await Account.deleteOne({ _id: account._id, user });
     if (req.query.moveInitialBalance === '1') {
-      await Account.updateOne({ _id: target._id }, { $inc: { initialBalanceCents: account.initialBalanceCents } });
+      await Account.updateOne(
+        { _id: target._id, user },
+        { $inc: { initialBalanceCents: account.initialBalanceCents } },
+      );
     }
     return res.status(204).end();
   }
 
-  const removed = await Transaction.find({ account: account._id }, '_id');
-  await Transaction.deleteMany({ account: account._id });
+  const removed = await Transaction.find({ user, account: account._id }, '_id');
+  await Transaction.deleteMany({ user, account: account._id });
   // Transfers from other accounts lose their link to the deleted side
-  await Transaction.updateMany({ transferPeer: { $in: removed.map((t) => t._id) } }, { transferPeer: null });
-  await Transaction.updateMany({ transferAccount: account._id }, { transferAccount: null });
-  await account.deleteOne();
+  await Transaction.updateMany({ user, transferPeer: { $in: removed.map((t) => t._id) } }, { transferPeer: null });
+  await Transaction.updateMany({ user, transferAccount: account._id }, { transferAccount: null });
+  await Account.deleteOne({ _id: account._id, user });
   res.status(204).end();
 });
 

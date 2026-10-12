@@ -29,7 +29,8 @@ router.post('/check-duplicates', async (req, res) => {
   if (!Array.isArray(transactions)) {
     return res.status(400).json({ error: 'transactions doit être une liste' });
   }
-  res.json(await checkDuplicates(account, transactions));
+  await Account.checkOwned(req.userId, account);
+  res.json(await checkDuplicates(req.userId, account, transactions));
 });
 
 // Body: { account, transactions: [{ date, description, amountCents, category?, transferAccount? }], allowDuplicates? }
@@ -46,20 +47,24 @@ router.post('/import', async (req, res) => {
   if (transactions.some((t) => Number.isNaN(Date.parse(t.date)) || !Number.isInteger(t.amountCents))) {
     return res.status(400).json({ error: 'Transaction avec une date ou un montant invalide' });
   }
-  const account = await Account.findById(accountId);
+  const user = req.userId;
+  const account = await Account.findOne({ _id: accountId, user });
   if (!account) return res.status(404).json({ error: 'Account not found' });
   if (transactions.some((t) => t.transferAccount && String(t.transferAccount) === String(account._id))) {
     return res.status(400).json({ error: "Un transfert doit aller vers un autre compte" });
   }
+  await Account.checkOwned(user, transactions.map((t) => t.transferAccount));
+  await Category.checkOwned(user, transactions.map((t) => !t.transferAccount && t.category));
 
   const key = (t) => `${new Date(t.date).toISOString()}|${t.description}|${t.amountCents}`;
   const existingCount = new Map();
-  const existing = await Transaction.find({ account: account._id }, 'date description amountCents');
+  const existing = await Transaction.find({ user, account: account._id }, 'date description amountCents');
   for (const t of existing) existingCount.set(key(t), (existingCount.get(key(t)) ?? 0) + 1);
 
   const toInsert = [];
   for (const t of transactions) {
     const doc = {
+      user,
       account: account._id,
       date: t.date,
       description: t.description ?? '',
@@ -99,11 +104,11 @@ function searchRegex(text) {
 }
 
 // ?q=: description, account or category name, or amount ("12,50" finds ±12.50)
-async function searchFilter(q) {
+async function searchFilter(user, q) {
   const re = searchRegex(q);
   const [accounts, categories] = await Promise.all([
-    Account.find({ name: re }, '_id'),
-    Category.find({ name: re }, '_id'),
+    Account.find({ user, name: re }, '_id'),
+    Category.find({ user, name: re }, '_id'),
   ]);
   const or = [
     { description: re },
@@ -124,7 +129,8 @@ async function searchFilter(q) {
 router.get('/', async (req, res) => {
   const { account, from, to } = req.query;
   const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-  const filter = q ? await searchFilter(q) : {};
+  const user = req.userId;
+  const filter = { ...(q && (await searchFilter(user, q))), user };
   if (account) filter.account = account;
   if (from || to) {
     filter.date = {};
@@ -136,9 +142,9 @@ router.get('/', async (req, res) => {
   const query = () =>
     Transaction.find(filter)
       .sort({ date: -1, _id: -1 })
-      .populate('account', 'name logoUpdatedAt')
-      .populate('category', 'name kind color')
-      .populate('transferAccount', 'name');
+      .populate({ path: 'account', select: 'name logoUpdatedAt', match: { user } })
+      .populate({ path: 'category', select: 'name kind color', match: { user } })
+      .populate({ path: 'transferAccount', select: 'name', match: { user } });
 
   if (req.query.page === undefined) return res.json(await query());
 
@@ -151,33 +157,37 @@ router.get('/', async (req, res) => {
   res.json({ items, total, page, pageSize });
 });
 
-// Links between the two sides of a transfer go through /api/transfers only
-function withoutLink(body) {
-  const { transferPeer, transferIgnored, duplicateIgnored, ...rest } = body;
+// Links between the two sides of a transfer go through /api/transfers only.
+// The account, category and other side of a transfer must be the user's.
+async function editable(user, body) {
+  const { transferPeer, transferIgnored, duplicateIgnored, user: _, ...rest } = body;
+  await Account.checkOwned(user, rest.account, rest.transferAccount);
+  await Category.checkOwned(user, rest.category);
   return rest;
 }
 
 router.post('/', async (req, res) => {
-  const transaction = await Transaction.create(withoutLink(req.body));
+  const transaction = await Transaction.create({ ...(await editable(req.userId, req.body)), user: req.userId });
   await syncTransferAfterUpdate(transaction);
   res.status(201).json(transaction);
 });
 
 router.put('/:id', async (req, res) => {
-  const transaction = await Transaction.findByIdAndUpdate(req.params.id, withoutLink(req.body), {
-    new: true,
-    runValidators: true,
-  });
+  const transaction = await Transaction.findOneAndUpdate(
+    { _id: req.params.id, user: req.userId },
+    await editable(req.userId, req.body),
+    { new: true, runValidators: true },
+  );
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
   await syncTransferAfterUpdate(transaction);
   res.json(transaction);
 });
 
 router.delete('/:id', async (req, res) => {
-  const transaction = await Transaction.findById(req.params.id);
+  const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
   await unlinkTransfer(transaction);
-  await transaction.deleteOne();
+  await Transaction.deleteOne({ _id: transaction._id, user: req.userId });
   res.status(204).end();
 });
 

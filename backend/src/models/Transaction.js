@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ownedPlugin } from '../lib/owned.js';
 
 const transactionSchema = new mongoose.Schema(
   {
@@ -20,8 +21,9 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+transactionSchema.plugin(ownedPlugin);
 transactionSchema.index({ account: 1, date: -1 });
 // Transactions table: newest first, paginated
-transactionSchema.index({ date: -1, _id: -1 });
+transactionSchema.index({ user: 1, date: -1, _id: -1 });
 
 export default mongoose.model('Transaction', transactionSchema);

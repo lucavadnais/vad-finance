@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
+import { ownedPlugin } from '../lib/owned.js';
 
-// App settings, a single document for now (one per user once accounts exist)
+// Each user's settings, a single document per user
 const settingSchema = new mongoose.Schema(
   {
     // Kept aside each month for unplanned spending (a coffee...): it is
@@ -13,10 +14,14 @@ const settingSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+settingSchema.plugin(ownedPlugin);
+// One per user (the plugin's index on `user`, made unique)
+settingSchema.path('user').index({ unique: true });
+
 const Setting = mongoose.model('Setting', settingSchema);
 export default Setting;
 
-// The settings document, created with the defaults the first time
-export async function getSettings() {
-  return (await Setting.findOne()) ?? (await Setting.create({}));
+// The user's settings document, created with the defaults the first time
+export async function getSettings(user) {
+  return Setting.findOneAndUpdate({ user }, {}, { upsert: true, new: true, setDefaultsOnInsert: true });
 }

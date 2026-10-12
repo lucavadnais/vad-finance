@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
+import { ownedPlugin } from '../lib/owned.js';
 
 const categorySchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true, unique: true },
+    name: { type: String, required: true, trim: true },
     kind: { type: String, enum: ['income', 'expense'], required: true },
     group: { type: mongoose.Schema.Types.ObjectId, ref: 'CategoryGroup', default: null },
     // '#rrggbb', used for the category everywhere (charts, badges). Set by the
@@ -16,5 +17,9 @@ const categorySchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+categorySchema.plugin(ownedPlugin);
+// Unique per user: two users can each have their « Épicerie »
+categorySchema.index({ user: 1, name: 1 }, { unique: true });
 
 export default mongoose.model('Category', categorySchema);

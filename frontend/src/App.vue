@@ -1,20 +1,46 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
-import { Settings } from '@lucide/vue';
+import { CircleUser, LogOut, Settings } from '@lucide/vue';
+import { useAuth } from '@/composables/useAuth';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useSelectedMonth, useSelectedPeriod } from '@/composables/useSelectedMonth';
 import { PERIODS } from '@/lib/chartData';
 import { useSettings } from '@/composables/useSettings';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import MonthStepper from '@/components/MonthStepper.vue';
 import OptionSelect from '@/components/OptionSelect.vue';
 import SettingsDialog from '@/components/SettingsDialog.vue';
+import SignInPage from '@/pages/SignInPage.vue';
 
-const { error, refresh } = useFinanceData();
+const { user, loadUser, signOut } = useAuth();
+const { error, refresh, setError } = useFinanceData();
 const { open: settingsOpen, openSettings } = useSettings();
 
-onMounted(refresh);
+onMounted(loadUser);
+// Each sign-in (at startup, or again after the session ended) loads the data
+watch(user, (now, before) => {
+  if (now && !before) refresh();
+});
+
+async function onSignOut() {
+  try {
+    await signOut();
+  } catch (err) {
+    setError((err as Error).message);
+  }
+}
+
+// Google's picture may fail to load (offline...): the icon shows instead
+const pictureFailed = ref(false);
 
 // The period and month of the home page (not of an account's page)
 const route = useRoute();
@@ -33,7 +59,12 @@ watch(settingsOpen, (open) => {
 </script>
 
 <template>
-  <main class="mx-auto flex max-w-screen-2xl flex-col gap-6 px-4 py-4 md:px-6 md:py-8 xl:px-12 2xl:px-16">
+  <!-- Nothing while the session is checked, so the sign-in page does not flash -->
+  <SignInPage v-if="user === null" />
+  <main
+    v-else-if="user"
+    class="mx-auto flex max-w-screen-2xl flex-col gap-6 px-4 py-4 md:px-6 md:py-8 xl:px-12 2xl:px-16"
+  >
     <!-- Computer: stuck to the top while the page scrolls, with the home's
          month, which the cards follow. A phone has a bar per
          tab instead (and all the accounts) -->
@@ -47,10 +78,36 @@ watch(settingsOpen, (open) => {
         <MonthStepper v-if="period === 'month'" v-model="month" class="max-md:hidden" />
         <OptionSelect v-model="period" :options="PERIODS" class="w-auto max-md:hidden" aria-label="Période" />
       </template>
-      <!-- Will become the user menu (Paramètres, Se déconnecter) with accounts -->
-      <Button variant="ghost" size="icon" aria-label="Paramètres" title="Paramètres" @click="openSettings()">
-        <Settings />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="icon" class="rounded-full" aria-label="Menu du compte" title="Menu du compte">
+            <img
+              v-if="user.picture && !pictureFailed"
+              :src="user.picture"
+              alt=""
+              referrerpolicy="no-referrer"
+              class="size-8 rounded-full"
+              @error="pictureFailed = true"
+            />
+            <CircleUser v-else />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-60">
+          <DropdownMenuLabel class="flex flex-col font-normal">
+            <span v-if="user.name" class="truncate font-medium">{{ user.name }}</span>
+            <span class="truncate text-xs text-muted-foreground">{{ user.email }}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @select="openSettings()">
+            <Settings />
+            Paramètres
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="onSignOut">
+            <LogOut />
+            Se déconnecter
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
 
     <p v-if="error" class="text-sm text-destructive">{{ error }}</p>

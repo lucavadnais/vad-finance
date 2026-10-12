@@ -39,27 +39,31 @@ export function pickColor(used) {
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
-// Colors seen in the charts: the groups', and the categories' without a group.
-// `except`: the category or group being recolored.
-export async function usedColors(except = null) {
+// Colors seen in the user's charts: the groups', and the categories' without a
+// group. `except`: the category or group being recolored.
+export async function usedColors(user, except = null) {
   const notSelf = except ? { _id: { $ne: except } } : {};
   const [groups, categories] = await Promise.all([
-    CategoryGroup.find({ ...notSelf, color: { $ne: null } }, 'color').lean(),
-    Category.find({ ...notSelf, group: null, color: { $ne: null } }, 'color').lean(),
+    CategoryGroup.find({ user, ...notSelf, color: { $ne: null } }, 'color').lean(),
+    Category.find({ user, ...notSelf, group: null, color: { $ne: null } }, 'color').lean(),
   ]);
   return [...groups, ...categories].map((d) => d.color);
 }
 
-// Groups and categories saved before colors existed get one each
+// Groups and categories saved before colors existed get one each, apart from
+// the other colors of their user. Those without a user yet (before
+// scripts/migrate-to-users.js) wait for it.
 export async function migrateColors() {
   const noColor = { $or: [{ color: null }, { color: { $exists: false } }] };
-  const used = await usedColors();
+  const usedByUser = new Map();
   for (const Model of [CategoryGroup, Category]) {
-    for (const d of await Model.find(noColor, '_id group')) {
-      const color = pickColor(used);
+    for (const d of await Model.find({ ...noColor, user: { $ne: null } }, '_id group user')) {
+      const key = String(d.user);
+      if (!usedByUser.has(key)) usedByUser.set(key, await usedColors(d.user));
+      const color = pickColor(usedByUser.get(key));
       // A category in a group shows a shade of the group's color, not its own
-      if (!d.group) used.push(color);
-      await Model.updateOne({ _id: d._id }, { color });
+      if (!d.group) usedByUser.get(key).push(color);
+      await Model.updateOne({ _id: d._id, user: d.user }, { color });
     }
   }
 }

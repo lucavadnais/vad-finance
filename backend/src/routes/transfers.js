@@ -11,30 +11,30 @@ const router = Router();
 
 // Suggested pairs: [{ out, in, daysApart }]
 router.get('/candidates', async (req, res) => {
-  res.json(await findTransferCandidates());
+  res.json(await findTransferCandidates(req.userId));
 });
 
 // Body: { from, to, date, description, amountCents (> 0) }
 router.post('/', async (req, res) => {
-  const [out, inc] = await createTransfer(req.body);
+  const [out, inc] = await createTransfer(req.userId, req.body);
   res.status(201).json({ out, in: inc });
 });
 
 // Body: { ids: [a, b] }
 router.post('/link', async (req, res) => {
   const [a, b] = req.body.ids ?? [];
-  await linkTransfer(a, b);
+  await linkTransfer(req.userId, a, b);
   res.status(204).end();
 });
 
 // Body: { ids: [a, b] } - dismiss a suggested pair
 router.post('/ignore', async (req, res) => {
-  await Transaction.updateMany({ _id: { $in: req.body.ids ?? [] } }, { transferIgnored: true });
+  await Transaction.updateMany({ _id: { $in: req.body.ids ?? [] }, user: req.userId }, { transferIgnored: true });
   res.status(204).end();
 });
 
 router.delete('/link/:id', async (req, res) => {
-  const transaction = await Transaction.findById(req.params.id);
+  const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
   await unlinkTransfer(transaction);
   res.status(204).end();

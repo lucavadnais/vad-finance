@@ -20,9 +20,9 @@ function matchKind(candidate, existing) {
 // may duplicate. Each existing transaction matches at most one candidate, exact
 // matches first, so a statement with two identical coffees against one saved
 // coffee flags only one of them.
-export async function checkDuplicates(accountId, candidates) {
+export async function checkDuplicates(user, accountId, candidates) {
   const existing = await Transaction.find(
-    { account: accountId },
+    { user, account: accountId },
     'date description amountCents',
   ).lean();
 
@@ -47,11 +47,11 @@ export async function checkDuplicates(accountId, candidates) {
   return [...byIndex.values()].sort((a, b) => a.index - b.index);
 }
 
-// Pairs of saved transactions that may be the same one. Pairs the user marked
-// as "not a duplicate" are skipped, and each transaction appears once.
-export async function findDuplicatePairs() {
-  const all = await Transaction.find({}, 'account date description amountCents duplicateIgnored')
-    .populate('account', 'name')
+// Pairs of the user's saved transactions that may be the same one. Pairs the
+// user marked as "not a duplicate" are skipped, and each transaction appears once.
+export async function findDuplicatePairs(user) {
+  const all = await Transaction.find({ user }, 'account date description amountCents duplicateIgnored')
+    .populate({ path: 'account', select: 'name', match: { user } })
     .sort({ date: 1 })
     .lean();
 
@@ -90,9 +90,10 @@ export async function findDuplicatePairs() {
 const strip = ({ duplicateIgnored, ...t }) => t;
 
 // "Not a duplicate": remembered on both sides so the pair is not suggested again
-export async function ignoreDuplicatePair(idA, idB) {
+export async function ignoreDuplicatePair(user, idA, idB) {
+  await Transaction.checkOwned(user, idA, idB);
   await Promise.all([
-    Transaction.updateOne({ _id: idA }, { $addToSet: { duplicateIgnored: idB } }),
-    Transaction.updateOne({ _id: idB }, { $addToSet: { duplicateIgnored: idA } }),
+    Transaction.updateOne({ _id: idA, user }, { $addToSet: { duplicateIgnored: idB } }),
+    Transaction.updateOne({ _id: idB, user }, { $addToSet: { duplicateIgnored: idA } }),
   ]);
 }

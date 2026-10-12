@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { connectDb } from './db.js';
+import { requireAuth } from './lib/auth.js';
+import authRouter from './routes/auth.js';
 import accountsRouter from './routes/accounts.js';
 import categoriesRouter from './routes/categories.js';
 import categoryGroupsRouter from './routes/categoryGroups.js';
@@ -15,10 +17,15 @@ import { migrateProjections } from './models/Projection.js';
 import { migrateColors } from './lib/colors.js';
 
 const app = express();
-app.use(cors());
+// No CORS: the frontend is served from the same address as the API (by Vite's
+// proxy in dev), and other sites must not call it with the user's cookie
 app.use(express.json());
+app.use(cookieParser());
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+app.use('/api/auth', authRouter);
+// Every route below needs a signed-in user (req.userId)
+app.use('/api', requireAuth);
 app.use('/api/accounts', accountsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/category-groups', categoryGroupsRouter);

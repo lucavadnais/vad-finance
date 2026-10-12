@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ownedPlugin } from '../lib/owned.js';
 
 // A planned expense or an amount to receive, for the month-by-month projection.
 // It lands on `startDate`, then, unless it happens once, every `interval` weeks,
@@ -25,6 +26,8 @@ const projectionSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+projectionSchema.plugin(ownedPlugin);
 
 const Projection = mongoose.model('Projection', projectionSchema);
 export default Projection;

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ownedPlugin } from '../lib/owned.js';
 
 const accountSchema = new mongoose.Schema(
   {
@@ -32,5 +33,7 @@ const accountSchema = new mongoose.Schema(
     },
   },
 );
+
+accountSchema.plugin(ownedPlugin);
 
 export default mongoose.model('Account', accountSchema);

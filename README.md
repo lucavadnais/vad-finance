@@ -34,6 +34,33 @@ docker compose up --build
 
 Les dépendances npm sont installées automatiquement à chaque démarrage du conteneur, et le code est rechargé à chaque modification.
 
+### Connexion avec Google
+
+Chaque utilisateur se connecte avec son compte Google et ne voit que ses propres données. Pour l'activer :
+
+1. Dans la [Google Cloud Console](https://console.cloud.google.com/apis/credentials) : **Créer des identifiants → ID client OAuth → Application Web**.
+2. **Origines JavaScript autorisées** : `http://localhost`, `http://localhost:5173`, `http://localhost:3000`, plus l'adresse HTTPS de production (ex. celle de Tailscale). Google refuse les adresses en HTTP autres que `localhost` : depuis un téléphone sur le réseau local en HTTP, la connexion ne fonctionne pas.
+3. Créer un fichier `.env` à la racine du projet (ignoré par git) :
+   ```bash
+   GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
+   ```
+4. Redémarrer les conteneurs : `docker compose up -d` (VS Code : **Dev Containers: Rebuild Container**).
+
+Le backend vérifie le jeton remis par Google (signature, destinataire, expiration), puis ouvre une session de 30 jours, prolongée à l'usage : un cookie `httpOnly` (illisible par les scripts de la page), `SameSite=Lax` et `Secure` en HTTPS. Seule l'empreinte SHA-256 du jeton de session est enregistrée en base.
+
+Chaque document (compte, transaction, catégorie…) porte le `user` à qui il appartient, et chaque requête filtre dessus. Les modèles refusent toute requête qui ne nomme pas d'utilisateur (`backend/src/lib/owned.js`). Un identifiant envoyé par le client (compte d'une transaction, groupe d'une catégorie…) doit aussi appartenir à l'utilisateur.
+
+#### Données créées avant les utilisateurs
+
+Elles n'ont pas de `user` et restent invisibles jusqu'à ce qu'on les attribue à quelqu'un. Dans le terminal du conteneur :
+
+```bash
+npm run migrate:users --prefix backend -- vous@gmail.com           # simulation : affiche ce qui changerait
+npm run migrate:users --prefix backend -- vous@gmail.com --apply   # migre
+```
+
+Le script attribue toutes ces données à cette adresse, en créant l'utilisateur s'il ne s'est jamais connecté (il est relié à sa première connexion Google), puis met les index à jour (noms de catégories uniques par utilisateur et non plus pour tous). Il s'arrête sans rien modifier si un nom de catégorie ou de groupe est déjà utilisé par cet utilisateur. Le relancer est sans effet. Faites une sauvegarde avant (`mongodump`).
+
 ### Commandes utiles
 
 Dans le terminal du conteneur (`docker compose exec app bash` hors VS Code) :
@@ -65,7 +92,7 @@ npm run build    # compile le frontend dans frontend/dist → http://localhost:3
 Relancez `npm run build` pour mettre à jour l'application installée. En développement, utilisez toujours http://localhost:5173. `npm start` lance le backend sans nodemon, pour une machine qui ne fait pas tourner `npm run dev`.
 
 - **iPhone** : Safari → Partager → « Sur l'écran d'accueil ».
-- **Android / ordinateur** : Chrome → « Installer l'application ». Chrome exige HTTPS (ou `localhost`) ; depuis un téléphone sur le réseau local en HTTP, seul l'ajout à l'écran d'accueil d'iOS fonctionne. Pour un accès HTTPS limité à vos appareils, placez le port 3000 derrière [Tailscale](https://tailscale.com/kb/1312/serve) (`tailscale serve 3000`). L'application n'a pas encore d'authentification : ne l'exposez pas publiquement sur Internet.
+- **Android / ordinateur** : Chrome → « Installer l'application ». Chrome exige HTTPS (ou `localhost`) ; depuis un téléphone sur le réseau local en HTTP, seul l'ajout à l'écran d'accueil d'iOS fonctionne. Pour un accès HTTPS limité à vos appareils, placez le port 3000 derrière [Tailscale](https://tailscale.com/kb/1312/serve) (`tailscale serve 3000`). Pour une exposition publique, servez-la en HTTPS.
 
 Les composants shadcn-vue sont générés dans `frontend/src/components/ui/` et s'importent via l'alias `@` (`import { Button } from '@/components/ui/button'`).
 
@@ -79,8 +106,11 @@ backend/
   src/
     index.js          # point d'entrée Express
     db.js             # connexion MongoDB
-    models/           # schémas Mongoose (Account, Category, Transaction, Projection…)
+    models/           # schémas Mongoose (User, Session, Account, Category, Transaction…)
     routes/           # routes REST /api/*
+    lib/auth.js       # sessions (cookie) et middleware requireAuth
+    lib/owned.js      # isolation des données par utilisateur
+  scripts/            # migrate-to-users.js
 frontend/
   src/
     App.vue           # interface principale
@@ -95,6 +125,10 @@ frontend/
 | Méthode             | Route                   | Description                                        |
 | ------------------- | ----------------------- | -------------------------------------------------- |
 | GET                 | `/api/health`           | Vérification de l'état                             |
+| GET                 | `/api/auth/config`      | Client ID Google pour le bouton de connexion       |
+| POST                | `/api/auth/google`      | Connexion : `{ credential }` (jeton Google) → ouvre la session |
+| GET                 | `/api/auth/me`          | Utilisateur connecté, ou 401                       |
+| POST                | `/api/auth/logout`      | Ferme la session                                   |
 | GET / POST          | `/api/accounts`         | Comptes (avec solde calculé)                       |
 | PUT / DELETE        | `/api/accounts/:id`     |                                                    |
 | GET / PUT / DELETE  | `/api/accounts/:id/logo` | Image du compte (PUT : le fichier brut, PNG/JPEG/WebP/GIF, 1 Mo max) |
@@ -114,6 +148,8 @@ frontend/
 | DELETE              | `/api/transfers/link/:id` | Délie les deux côtés                             |
 | GET / POST          | `/api/projections`      | Prévisions : dépenses prévues (`kind: expense`) et comptes à recevoir (`income`), un jour du mois, `recurrence` `monthly` / `yearly` (+ `month`) / `once` (+ `month`, `year`), `endDate` facultative (récurrentes), catégorie facultative |
 | PUT / DELETE        | `/api/projections/:id`  | PUT remplace toute la prévision                    |
+
+Toutes les autres routes demandent une session (sinon 401) et ne voient que les données de l'utilisateur connecté.
 
 Les montants sont stockés en **cents** (entiers) pour éviter les erreurs d'arrondi.
 Une transaction positive est un revenu, une négative une dépense.

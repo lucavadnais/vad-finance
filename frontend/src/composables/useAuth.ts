@@ -22,11 +22,19 @@ async function loadUser() {
   }
 }
 
-async function signIn(credential: string) {
-  const signedIn = await api.signInWithGoogle(credential);
+function setSignedIn(signedIn: User) {
   if (lastUserId && lastUserId !== signedIn._id) return window.location.reload();
   lastUserId = signedIn._id;
   user.value = signedIn;
+}
+
+async function signIn(credential: string) {
+  setSignedIn(await api.signInWithGoogle(credential));
+}
+
+// Local tests only (DEV_LOGIN=1 on the server)
+async function signInAsTestUser() {
+  setSignedIn(await api.signInAsTestUser());
 }
 
 // Back to a fresh page: the user's data, picked account and month... all go
@@ -35,6 +43,12 @@ async function signOut() {
   window.location.assign('/');
 }
 
+// Then back to the sign-in page, the same way as signing out
+async function deleteAccount() {
+  await api.deleteMe();
+  window.location.assign('/');
+}
+
 export function useAuth() {
-  return { user, loadUser, signIn, signOut };
+  return { user, loadUser, signIn, signInAsTestUser, signOut, deleteAccount };
 }

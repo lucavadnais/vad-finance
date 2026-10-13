@@ -13,6 +13,7 @@ import transfersRouter from './routes/transfers.js';
 import duplicatesRouter from './routes/duplicates.js';
 import projectionsRouter from './routes/projections.js';
 import settingsRouter from './routes/settings.js';
+import usersRouter from './routes/users.js';
 
 const app = express();
 // No CORS: the frontend is served from the same address as the API (by Vite's
@@ -32,6 +33,7 @@ app.use('/api/transfers', transfersRouter);
 app.use('/api/duplicates', duplicatesRouter);
 app.use('/api/projections', projectionsRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/users', usersRouter);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Route introuvable' }));
 
 // The built frontend (npm run build), when there is one: a single server for

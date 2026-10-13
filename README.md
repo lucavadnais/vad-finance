@@ -50,6 +50,12 @@ Le backend vérifie le jeton remis par Google (signature, destinataire, expirati
 
 Chaque document (compte, transaction, catégorie…) porte le `user` à qui il appartient, et chaque requête filtre dessus. Les modèles refusent toute requête qui ne nomme pas d'utilisateur (`backend/src/lib/owned.js`). Un identifiant envoyé par le client (compte d'une transaction, groupe d'une catégorie…) doit aussi appartenir à l'utilisateur.
 
+Dans **Paramètres → Profil**, l'utilisateur peut supprimer son compte (`DELETE /api/users/me`) : toutes ses données, ses sessions et l'utilisateur lui-même sont effacés définitivement, après avoir saisi son adresse pour confirmer.
+
+#### Utilisateur de test (local)
+
+Avec `DEV_LOGIN=1` dans le fichier `.env`, la page de connexion affiche « Se connecter comme utilisateur de test » : connexion sans Google avec l’utilisateur `test@example.com`, créé sans données à sa première connexion. Redémarrez les conteneurs après l'avoir ajouté. À n'activer que sur votre machine : n'importe qui ouvrant l'application (y compris par Tailscale) pourrait l'utiliser.
+
 ### Commandes utiles
 
 Dans le terminal du conteneur (`docker compose exec app bash` hors VS Code) :

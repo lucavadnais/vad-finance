@@ -1,12 +1,11 @@
 <script setup lang="ts">
 // "Paramètres": a large dialog with a side menu, one section per subject
-// (categories and groups, budget, display); user profile and security will
-// join it. On a phone, like a phone's settings: full screen, the list of the
+// (categories and groups, budget, display, profile). On a phone, like a phone's settings: full screen, the list of the
 // sections first, each one opening over it with a way back to the list.
 import type { Component } from 'vue';
 import type { SettingsSection } from '@/composables/useSettings';
 import { ref, watch } from 'vue';
-import { ChartLine, ChevronLeft, ChevronRight, PiggyBank, Tags } from '@lucide/vue';
+import { ChartLine, ChevronLeft, ChevronRight, CircleUser, PiggyBank, Tags } from '@lucide/vue';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useSettings } from '@/composables/useSettings';
 import { cn } from '@/lib/utils';
@@ -15,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import BudgetSettings from './BudgetSettings.vue';
 import CategoryManager from './CategoryManager.vue';
 import DisplaySettings from './DisplaySettings.vue';
+import ProfileSettings from './ProfileSettings.vue';
 
 const { open, section, direct } = useSettings();
 
@@ -34,6 +34,7 @@ const SECTIONS: { key: SettingsSection; label: string; icon: Component }[] = [
   { key: 'categories', label: 'Catégories et groupes', icon: Tags },
   { key: 'budget', label: 'Budget', icon: PiggyBank },
   { key: 'display', label: 'Affichage', icon: ChartLine },
+  { key: 'profile', label: 'Profil', icon: CircleUser },
 ];
 
 // Errors show inside the dialog: the page's banner is hidden behind it
@@ -112,6 +113,7 @@ watch([open, section], () => (error.value = ''));
         />
         <BudgetSettings v-else-if="section === 'budget'" @error="error = $event" />
         <DisplaySettings v-else-if="section === 'display'" @error="error = $event" />
+        <ProfileSettings v-else-if="section === 'profile'" @error="error = $event" />
       </div>
     </DialogContent>
   </Dialog>

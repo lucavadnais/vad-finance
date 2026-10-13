@@ -30,6 +30,9 @@ services:
       # OAuth client id for "Se connecter avec Google", from the .env file next
       # to this one (GOOGLE_CLIENT_ID=...apps.googleusercontent.com), see README
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # DEV_LOGIN=1 in .env: a "Se connecter comme utilisateur de test" button
+      # on the sign-in page, for local tests. Off when not set
+      DEV_LOGIN: ${DEV_LOGIN:-}
       # Keep Claude Code settings and login in the claude-config volume
       CLAUDE_CONFIG_DIR: /root/.claude
     # Install/refresh dependencies on every start, then run both dev servers

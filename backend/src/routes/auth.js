@@ -11,10 +11,16 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 // What the frontend may know of a user
 const publicUser = ({ _id, email, name, picture }) => ({ _id, email, name, picture });
 
+// Local tests only: DEV_LOGIN=1 (in the .env file) lets anyone opening the
+// app sign in as a test user, without Google. Never set it on a server others
+// can reach.
+const devLogin = process.env.DEV_LOGIN === '1';
+const TEST_USER = { googleSub: 'dev-test-user', email: 'test@example.com', name: 'Utilisateur de test' };
+
 // The Google client id, for the sign-in button. Public: it is in every page
 // using Google's button anyway.
 router.get('/config', (req, res) => {
-  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null });
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null, devLogin });
 });
 
 // Body: { credential }, the ID token Google's button hands the page. Checked
@@ -41,6 +47,15 @@ router.post('/google', async (req, res) => {
   await user.save();
 
   // A session already open in this browser is replaced
+  await endSession(req, res);
+  await startSession(req, res, user);
+  res.json(publicUser(user));
+});
+
+// Signs in as the test user, created at the first sign-in like a Google one
+router.post('/dev', async (req, res) => {
+  if (!devLogin) throw httpError(404, 'Route introuvable');
+  const user = (await User.findOne({ googleSub: TEST_USER.googleSub })) ?? (await User.create(TEST_USER));
   await endSession(req, res);
   await startSession(req, res, user);
   res.json(publicUser(user));

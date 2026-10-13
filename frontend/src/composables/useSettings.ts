@@ -2,8 +2,8 @@
 // les catégories…" in a category picker) straight on the right section
 import { ref } from 'vue';
 
-// One per section of the dialog's side menu (Profil, Sécurité... later)
-export type SettingsSection = 'categories' | 'budget' | 'display';
+// One per section of the dialog's side menu
+export type SettingsSection = 'categories' | 'budget' | 'display' | 'profile';
 
 const open = ref(false);
 const section = ref<SettingsSection>('categories');

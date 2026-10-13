@@ -52,12 +52,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const api = {
-  getAuthConfig: () => request<{ googleClientId: string | null }>('/auth/config'),
+  getAuthConfig: () => request<{ googleClientId: string | null; devLogin: boolean }>('/auth/config'),
   // 401 when nobody is signed in
   getMe: () => request<User>('/auth/me'),
   // `credential`: the ID token Google's sign-in button hands the page
   signInWithGoogle: (credential: string) => request<User>('/auth/google', { method: 'POST', body: { credential } }),
+  // Local tests only (DEV_LOGIN=1 on the server)
+  signInAsTestUser: () => request<User>('/auth/dev', { method: 'POST' }),
   signOut: () => request<null>('/auth/logout', { method: 'POST' }),
+  // The user and all their data, for good
+  deleteMe: () => request<null>('/users/me', { method: 'DELETE' }),
   getAccounts: () => request<Account[]>('/accounts'),
   createAccount: (body: AccountInput) => request<Account>('/accounts', { method: 'POST', body }),
   updateAccount: (id: string, body: AccountInput) => request<Account>(`/accounts/${id}`, { method: 'PUT', body }),

@@ -5,17 +5,30 @@ import { onMounted, ref } from 'vue';
 import { api } from '@/api';
 import { useAuth } from '@/composables/useAuth';
 import { loadGoogleIdentity } from '@/lib/googleIdentity';
+import { Button } from '@/components/ui/button';
 
-const { signIn } = useAuth();
+const { signIn, signInAsTestUser } = useAuth();
 
 // Google draws its button in there
 const button = ref<HTMLElement>();
 const loading = ref(true);
 const error = ref('');
+// Local tests: the server allows signing in as a test user (DEV_LOGIN=1)
+const devLogin = ref(false);
+
+async function onTestUser() {
+  error.value = '';
+  try {
+    await signInAsTestUser();
+  } catch (err) {
+    error.value = (err as Error).message;
+  }
+}
 
 onMounted(async () => {
   try {
-    const { googleClientId } = await api.getAuthConfig();
+    const { googleClientId, devLogin: dev } = await api.getAuthConfig();
+    devLogin.value = dev;
     if (!googleClientId) {
       error.value = "La connexion Google n'est pas configurée sur le serveur (GOOGLE_CLIENT_ID).";
       return;
@@ -64,6 +77,9 @@ onMounted(async () => {
         <span v-if="loading" class="text-sm text-muted-foreground">Chargement…</span>
         <div ref="button" />
       </div>
+      <Button v-if="devLogin" variant="outline" class="rounded-full" @click="onTestUser">
+        Se connecter comme utilisateur de test
+      </Button>
       <p v-if="error" class="text-sm text-destructive" role="alert">{{ error }}</p>
     </div>
   </main>

@@ -106,9 +106,10 @@ async function remove(p: Projection) {
           @add="openDialog(null)"
           @manage="listOpen = true"
         />
-        <!-- Forecasts vs actual by category, for the month shown -->
+        <!-- Forecasts vs actual by category, for the month shown; or the list
+             of "Non prévu" when it is selected, forecasts or not -->
         <ProjectionsChart
-          v-if="projections.length > 0"
+          v-if="projections.length > 0 || focus?.listOnly"
           v-model="month"
           :projections="projections"
           :transactions="transactions"

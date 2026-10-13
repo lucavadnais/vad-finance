@@ -78,7 +78,7 @@ const netShare = computed(() => {
          column; the figure shrinks with the screen so a big one still fits.
          Under it, its curve over 30 days. The whole of it opens the analysis,
          through a button stretched over it (the eye sits above it). -->
-    <section class="relative flex flex-col gap-1 pt-2 text-center">
+    <section class="relative flex flex-col gap-1 pt-6 text-center">
       <button
         type="button"
         class="absolute inset-0 rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -87,7 +87,7 @@ const netShare = computed(() => {
       />
       <p class="grid grid-cols-[minmax(2rem,1fr)_auto_minmax(2rem,1fr)] items-center">
         <span
-          class="col-start-2 text-[clamp(1.75rem,9vw,2.25rem)] leading-tight font-semibold tracking-tight tabular-nums"
+          class="col-start-2 text-[clamp(2rem,10vw,2.75rem)] leading-tight font-semibold tracking-tight tabular-nums"
         >
           {{ formatCents(totalCents) }}
         </span>

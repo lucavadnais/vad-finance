@@ -12,21 +12,13 @@ import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { computed, ref, useTemplateRef, watch, watchEffect } from 'vue';
 import { useElementSize, useScroll } from '@vueuse/core';
-import { ListChecks, Plus, TriangleAlert } from '@lucide/vue';
-import { formatCents, formatDate } from '@/api';
+import { ListChecks, Plus, ShieldCheck, TriangleAlert } from '@lucide/vue';
+import { formatCents } from '@/api';
 import { budget, budgetSection, estimatedMonth } from '@/lib/budget';
-import { NO_COLOR } from '@/lib/colors';
+import { BUFFER_COLOR, NO_COLOR } from '@/lib/colors';
 import { currentMonth } from '@/lib/projections';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import CategoryDot from './CategoryDot.vue';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useSettings } from '@/composables/useSettings';
@@ -46,6 +38,12 @@ export interface BudgetFocus {
   actualCents: number;
   // Spending past its forecast
   over: boolean;
+  // Its transactions, listed beside the chart: for the buffer, what drew on
+  // it (spending with no forecast, or in a category past its forecast); for
+  // "Non prévu", the spending (or income) with no forecast
+  transactions?: Transaction[];
+  // "Non prévu": nothing planned to compare with, the list alone
+  listOnly?: boolean;
 }
 const selected = defineModel<string | null>('selected', { default: null });
 const focus = defineModel<BudgetFocus | null>('focus', { default: null });
@@ -102,13 +100,20 @@ type CategoryCard = {
   color: string;
   plannedCents: number;
   actualCents: number;
+  // The monthly buffer: set apart from the categories (accent, hatched, a shield)
+  buffer?: boolean;
 };
+// The buffer's card: its color crossed by faint stripes, a reserve put aside
+const BUFFER_BACKGROUND = `repeating-linear-gradient(135deg, rgb(255 255 255 / 0.07) 0 6px, transparent 6px 14px), ${BUFFER_COLOR}`;
 
 // The buffer covers every overrun of the month: they are shown, not in red
 const covered = computed(() => {
   const s = section.value.summary;
   return kind.value === 'expense' && s.bufferCents > 0 && s.extraCents > 0 && s.overrunCents === 0;
 });
+// "Non prévu", unless the buffer covers it: its transactions are then in the
+// buffer's list
+const showUnplanned = computed(() => section.value.unplanned.length > 0 && !covered.value);
 // Categories with a forecast, biggest first (the order of lib/budget.ts); the
 // forecasts with no category share one card; then the buffer
 const cards = computed<CategoryCard[]>(() => {
@@ -132,7 +137,8 @@ const cards = computed<CategoryCard[]>(() => {
     list.push({
       key: 'buffer',
       label: 'Marge imprévus',
-      color: NO_COLOR,
+      color: BUFFER_COLOR,
+      buffer: true,
       plannedCents: s.summary.bufferCents,
       actualCents: s.summary.bufferUsedCents,
     });
@@ -144,9 +150,8 @@ const progress = (c: CategoryCard) => (c.plannedCents > 0 ? Math.min(100, (c.act
 
 // Spending or income with no forecast this month: its transactions, latest
 // first, listed in a dialog
-const unplannedOpen = ref(false);
-const unplannedTransactions = computed(() => {
-  const keys = new Set(section.value.unplanned.map((r) => r.key));
+// The month's transactions in the budget rows `keys`, latest first
+function monthTransactions(keys: Set<string>) {
   const known = new Set(props.categories.map((c) => c._id));
   return props.transactions
     .filter((t) => {
@@ -158,11 +163,37 @@ const unplannedTransactions = computed(() => {
       return keys.has(id && known.has(id) ? id : `none:${t.amountCents < 0 ? 'expense' : 'income'}`);
     })
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
-});
+}
+const unplannedTransactions = computed(() => monthTransactions(new Set(section.value.unplanned.map((r) => r.key))));
+// What drew on the buffer: the spending with no forecast, and the categories
+// past theirs
+const bufferTransactions = computed(() =>
+  monthTransactions(
+    new Set([
+      ...section.value.unplanned.map((r) => r.key),
+      ...section.value.compared.filter((r) => r.actualCents > r.plannedCents).map((r) => r.key),
+    ]),
+  ),
+);
+
+// "Non prévu" selected, like a card (its key)
+const UNPLANNED = 'unplanned';
 
 // The selected card's amounts, for the chart; unselected once it is gone
 // (another month, the other side)
 watchEffect(() => {
+  if (selected.value === UNPLANNED && showUnplanned.value) {
+    focus.value = {
+      label: 'Non prévu',
+      color: NO_COLOR,
+      plannedCents: 0,
+      actualCents: section.value.unplannedCents,
+      over: false,
+      transactions: unplannedTransactions.value,
+      listOnly: true,
+    };
+    return;
+  }
   const c = cards.value.find((c) => c.key === selected.value);
   if (selected.value && !c) selected.value = null;
   focus.value = c
@@ -172,10 +203,11 @@ watchEffect(() => {
         plannedCents: c.plannedCents,
         actualCents: c.actualCents,
         over: kind.value === 'expense' && c.actualCents > c.plannedCents,
+        transactions: c.buffer ? bufferTransactions.value : undefined,
       }
     : null;
 });
-const select = (c: CategoryCard) => (selected.value = selected.value === c.key ? null : c.key);
+const select = (key: string) => (selected.value = selected.value === key ? null : key);
 
 // Dots under the strip, one per screenful of cards
 const strip = useTemplateRef('strip');
@@ -310,50 +342,65 @@ watch(kind, () => strip.value?.scrollTo({ left: 0 }));
           <ListChecks class="size-5" />
         </button>
       </div>
-      <button
-        v-for="c in cards"
-        :key="c.key"
-        type="button"
-        class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl p-4 text-left shadow-sm transition active:scale-[0.98]"
-        :style="{ background: c.color }"
-        :class="[
-          isDark(c.color) ? 'text-white' : 'text-neutral-900',
-          selected === c.key && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
-          selected && selected !== c.key && 'opacity-50',
-        ]"
-        :aria-pressed="selected === c.key"
-        @click="select(c)"
-      >
-        <!-- The name, its share of the total beside it -->
-        <span class="flex items-baseline gap-2">
-          <span class="truncate text-base font-medium">{{ c.label }}</span>
-          <span class="ml-auto shrink-0 text-xs tabular-nums opacity-75">{{ share(c) }} %</span>
-        </span>
-        <!-- What already went out (or came in), the forecast under it -->
-        <span class="truncate text-xl font-semibold tabular-nums">
-          {{ split(c.actualCents).main }}<span class="text-sm font-medium">{{ split(c.actualCents).rest }}</span>
-        </span>
-        <span class="truncate text-xs tabular-nums opacity-75">sur {{ formatCents(c.plannedCents) }} prévus</span>
-        <!-- What really happened against the forecast -->
-        <span
-          class="mt-auto h-1 w-full shrink-0 overflow-hidden rounded-full"
-          :class="isDark(c.color) ? 'bg-white/25' : 'bg-black/10'"
-          :title="`${formatCents(c.actualCents)} réalisés`"
+      <template v-for="c in cards" :key="c.key">
+        <!-- The buffer apart from the categories -->
+        <Separator v-if="c.buffer" orientation="vertical" class="self-center data-[orientation=vertical]:h-32" />
+        <button
+          type="button"
+          class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl p-4 text-left shadow-sm transition active:scale-[0.98]"
+          :style="{ background: c.buffer ? BUFFER_BACKGROUND : c.color }"
+          :class="[
+            isDark(c.color) ? 'text-white' : 'text-neutral-900',
+            selected === c.key && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+            selected && selected !== c.key && 'opacity-50',
+          ]"
+          :aria-pressed="selected === c.key"
+          @click="select(c.key)"
         >
+          <!-- The name (on two lines if need be: the card is narrow), its share
+               of the total beside it - under the buffer's shield -->
+          <span class="flex items-start gap-2">
+            <span class="line-clamp-2 text-base leading-tight font-medium break-words" :title="c.label">
+              {{ c.label }}
+            </span>
+            <span class="mt-0.5 ml-auto flex shrink-0 flex-col items-end gap-1">
+              <ShieldCheck v-if="c.buffer" class="size-4" />
+              <span class="text-xs tabular-nums opacity-75">{{ share(c) }} %</span>
+            </span>
+          </span>
+          <!-- What already went out (or came in), the forecast under it -->
+          <span class="truncate text-xl font-semibold tabular-nums">
+            {{ split(c.actualCents).main }}<span class="text-sm font-medium">{{ split(c.actualCents).rest }}</span>
+          </span>
+          <span class="truncate text-xs tabular-nums opacity-75">sur {{ formatCents(c.plannedCents) }} prévus</span>
+          <!-- What really happened against the forecast -->
           <span
-            class="block h-full rounded-full"
-            :class="isDark(c.color) ? 'bg-white' : 'bg-neutral-900'"
-            :style="{ width: `${progress(c)}%` }"
-          />
-        </span>
-      </button>
-      <!-- With no forecast: what went out (or came in) anyway, its list on a tap -->
+            class="mt-auto h-1 w-full shrink-0 overflow-hidden rounded-full"
+            :class="isDark(c.color) ? 'bg-white/25' : 'bg-black/10'"
+            :title="`${formatCents(c.actualCents)} réalisés`"
+          >
+            <span
+              class="block h-full rounded-full"
+              :class="isDark(c.color) ? 'bg-white' : 'bg-neutral-900'"
+              :style="{ width: `${progress(c)}%` }"
+            />
+          </span>
+        </button>
+      </template>
+      <!-- With no forecast: what went out (or came in) anyway, selected like a
+           card: its transactions then show below, in place of the chart. Not
+           when the buffer covers it -->
       <button
-        v-if="section.unplanned.length > 0"
+        v-if="showUnplanned"
         type="button"
-        class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl border-2 border-dashed border-muted-foreground/40 bg-card p-4 text-left shadow-sm transition-transform active:scale-[0.98]"
+        class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl border-2 border-dashed border-muted-foreground/40 bg-card p-4 text-left shadow-sm transition active:scale-[0.98]"
+        :class="[
+          selected === UNPLANNED && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+          selected && selected !== UNPLANNED && 'opacity-50',
+        ]"
+        :aria-pressed="selected === UNPLANNED"
         title="Voir les transactions non prévues"
-        @click="unplannedOpen = true"
+        @click="select(UNPLANNED)"
       >
         <span class="truncate text-base font-medium">Non prévu</span>
         <span class="truncate text-xl font-semibold tabular-nums">
@@ -361,7 +408,7 @@ watch(kind, () => strip.value?.scrollTo({ left: 0 }));
           }}<span class="text-sm font-medium">{{ split(section.unplannedCents).rest }}</span>
         </span>
         <span class="mt-auto self-start truncate rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-          {{ covered ? 'Couvert par la marge' : `${unplannedTransactions.length} transaction(s)` }}
+          {{ unplannedTransactions.length }} transaction(s)
         </span>
       </button>
       <p v-if="cards.length === 0" class="flex h-40 shrink-0 items-center px-2 text-sm text-muted-foreground">
@@ -377,31 +424,5 @@ watch(kind, () => strip.value?.scrollTo({ left: 0 }));
         :class="i - 1 === page ? 'w-6 bg-foreground' : 'w-3 bg-muted-foreground/40'"
       />
     </div>
-
-    <Dialog v-model:open="unplannedOpen">
-      <DialogContent class="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{{ kind === 'expense' ? 'Dépenses' : 'Revenus' }} non prévus</DialogTitle>
-          <DialogDescription>
-            Ce mois-ci, dans des catégories sans prévision ·
-            <span class="tabular-nums">{{ formatCents(section.unplannedCents) }}</span>
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <ul class="flex flex-col divide-y">
-            <li v-for="t in unplannedTransactions" :key="t._id" class="flex items-center gap-3 py-2.5 text-sm">
-              <span class="flex min-w-0 flex-col">
-                <span class="truncate font-medium">{{ t.description }}</span>
-                <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CategoryDot :color="t.category ? categoryColors.get(t.category._id) : undefined" />
-                  {{ t.category?.name ?? 'Sans catégorie' }} · {{ formatDate(t.date) }}
-                </span>
-              </span>
-              <span class="ml-auto shrink-0 tabular-nums">{{ formatCents(Math.abs(t.amountCents)) }}</span>
-            </li>
-          </ul>
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
   </div>
 </template>

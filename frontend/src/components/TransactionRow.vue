@@ -20,8 +20,9 @@ import { useFinanceData } from '@/composables/useFinanceData';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 
-// hideAccount: in a list of one account's transactions, its logo on each row says nothing
-const props = defineProps<{ transaction: Transaction; hideAccount?: boolean }>();
+// hideAccount: in a list of one account's transactions, its logo on each row
+// says nothing. readonly: shown for reference, without the actions menu
+const props = defineProps<{ transaction: Transaction; hideAccount?: boolean; readonly?: boolean }>();
 const emit = defineEmits<{ edit: []; changed: []; error: [message: string] }>();
 
 const { categoryColors } = useFinanceData();
@@ -80,7 +81,7 @@ async function remove() {
     >
       {{ formatCents(transaction.amountCents) }}
     </TableCell>
-    <TableCell class="w-px pl-0 text-right">
+    <TableCell v-if="!readonly" class="w-px pl-0 text-right">
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button size="icon-sm" variant="ghost" aria-label="Actions" title="Actions">

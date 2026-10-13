@@ -3,7 +3,8 @@
 // chart, each bar what really came in or went out, topped in a paler shade by
 // what is still planned (spending past its forecast: the forecast and a red
 // bar side by side). The month's income and spending; or, with a card
-// selected above (`focus`), that category alone.
+// selected above (`focus`), that category alone - and for the buffer, what
+// drew on it, listed on the left.
 import type { ChartConfig } from '@/components/ui/chart';
 import type { Month } from '@/lib/projections';
 import type { Category, Projection, Transaction } from '@/types';
@@ -13,9 +14,11 @@ import { useElementSize } from '@vueuse/core';
 import { VisAxis, VisStackedBar, VisXYContainer } from '@unovis/vue';
 import { amountTickFormat, formatCents } from '@/api';
 import { budget, budgetSection } from '@/lib/budget';
+import { withAlpha } from '@/lib/colors';
 import { monthLabel } from '@/lib/projections';
 import { ChartContainer } from '@/components/ui/chart';
 import { useFinanceData } from '@/composables/useFinanceData';
+import TransactionList from '../TransactionList.vue';
 
 const props = defineProps<{
   projections: Projection[];
@@ -81,7 +84,7 @@ const columns = computed<Column[]>(() =>
 );
 const y = [(c: Column) => c.doneCents, (c: Column) => c.leftCents];
 const color = (c: Column, i: number) =>
-  i === 0 ? (c.over ? 'var(--destructive)' : c.color) : `color-mix(in srgb, ${c.color} 25%, transparent)`;
+  i === 0 ? (c.over ? 'var(--destructive)' : c.color) : withAlpha(c.color, 0.25);
 const tickValues = computed(() => columns.value.map((_, i) => i));
 const tickLabel = (i: number) => {
   const label = columns.value[Math.round(i)]?.label ?? '';
@@ -103,8 +106,12 @@ const barWidth = computed(() =>
 <template>
   <section class="flex flex-col gap-3">
     <div>
-      <h3 class="text-sm font-medium first-letter:uppercase">Prévu vs réalisé · {{ monthLabel(selected) }}</h3>
-      <p class="text-sm text-muted-foreground">Revenus et dépenses du mois.</p>
+      <h3 class="text-sm font-medium first-letter:uppercase">
+        {{ focus?.listOnly ? focus.label : 'Prévu vs réalisé' }} · {{ monthLabel(selected) }}
+      </h3>
+      <p class="text-sm text-muted-foreground">
+        {{ focus?.listOnly ? 'Les transactions sans prévision ce mois-ci.' : 'Revenus et dépenses du mois.' }}
+      </p>
     </div>
     <!-- Switching between the month and a selected card: the old chart fades
          out and the new one in, instead of Unovis morphing one into the other
@@ -122,7 +129,20 @@ const barWidth = computed(() =>
       </p>
       <!-- Phone: the tiles above the chart. Computer: stacked on its left, so
          neither stretches over the card's whole width -->
-      <div v-else :key="focus ? 'category' : 'month'" class="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
+      <div
+        v-else
+        :key="focus ? (focus.listOnly ? 'list' : focus.transactions ? 'buffer' : 'category') : 'month'"
+        class="flex flex-col gap-3 md:flex-row md:items-center md:gap-6"
+      >
+        <!-- The selected card's transactions: beside the chart (the buffer), or
+             alone ("Non prévu", nothing planned to chart) -->
+        <div
+          v-if="focus?.transactions"
+          class="shrink-0 overflow-y-auto"
+          :class="focus.listOnly ? 'max-h-80 w-full' : 'md:max-h-56 md:w-80 md:self-stretch'"
+        >
+          <TransactionList :transactions="focus.transactions" readonly empty="Rien n'a encore puisé dans la marge." />
+        </div>
         <!-- The amounts, one small tile per bar: its color's dot, what happened in
            big, the forecast under it. None for a selected card: its own card
            above says it already -->
@@ -143,7 +163,7 @@ const barWidth = computed(() =>
             >
           </div>
         </div>
-        <div ref="box" class="min-h-56 min-w-0 md:flex-1">
+        <div v-if="!focus?.listOnly" ref="box" class="min-h-56 min-w-0 md:flex-1">
           <!-- Drawn once its width is known, so its bars do not grow from nothing -->
           <ChartContainer
             v-if="boxWidth > 0"

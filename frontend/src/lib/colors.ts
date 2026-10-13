@@ -26,8 +26,21 @@ export const PALETTE = [
 // Gray for a category that cannot be found (e.g. deleted)
 export const NO_COLOR = '#898781';
 
+// The monthly buffer for unplanned spending, apart from every category: the
+// design system's accent (--brand-accent in index.css), as hex for the charts
+export const BUFFER_COLOR = '#15064c';
+
 const toRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 const toHex = (rgb: number[]) => `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+
+// The color at `alpha` opacity. A '#rrggbb' gives rgba(), which chart
+// animations (d3) can interpolate; color-mix() they would animate as text, its
+// hex digits read as numbers, and end up on another color. Other colors (a
+// var()) keep color-mix().
+export function withAlpha(color: string, alpha: number) {
+  if (/^#[0-9a-f]{6}$/i.test(color)) return `rgba(${toRgb(color).join(', ')}, ${alpha})`;
+  return `color-mix(in srgb, ${color} ${alpha * 100}%, transparent)`;
+}
 
 // `amount` < 0 darkens towards black, > 0 lightens towards white
 function tint(hex: string, amount: number) {

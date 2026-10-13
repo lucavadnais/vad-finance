@@ -10,6 +10,9 @@ const settingSchema = new mongoose.Schema(
     budgetBufferCents: { type: Number, min: 0, default: 0, validate: Number.isInteger },
     // Charts show their axes (amounts on the left, first and last dates below)
     chartAxes: { type: Boolean, default: true },
+    // The setup wizard shown to a new user (accounts, categories, budget,
+    // import) was finished or skipped
+    onboardingDone: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

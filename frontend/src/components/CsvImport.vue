@@ -65,8 +65,9 @@ function reset() {
   fileName.value = '';
 }
 
-function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) {
+function onDone(account: Account, { inserted, skipped, linked }: ImportSummary, warning?: string) {
   reset();
+  error.value = warning ?? '';
   message.value =
     `${inserted} transaction(s) importée(s) dans « ${account.name} »` +
     (skipped > 0 ? `, ${skipped} doublon(s) non importé(s)` : '') +
@@ -84,7 +85,8 @@ function onDone(account: Account, { inserted, skipped, linked }: ImportSummary) 
     <CardHeader class="max-md:px-0">
       <CardTitle>Ajouter des transactions</CardTitle>
       <CardDescription class="max-md:hidden">
-        Déposez le relevé CSV de votre banque : vous choisirez le compte et vérifierez les transactions avant de les importer.
+        Déposez le relevé CSV de votre banque : vous choisirez le compte et vérifierez les transactions avant de les
+        importer.
       </CardDescription>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 max-md:px-0">

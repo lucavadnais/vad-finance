@@ -1,10 +1,14 @@
 <script setup lang="ts">
 // "Profil" section of the settings: who is signed in (from their Google
-// account), and deleting the account with all its data. Typing the email
+// account), the setup wizard to go through again, and deleting the account
+// with all its data. Typing the email
 // confirms it, since nothing can be recovered afterwards.
 import { computed, ref, watch } from 'vue';
-import { CircleUser } from '@lucide/vue';
+import { RotateCcw } from '@lucide/vue';
+import { api } from '@/api';
 import { useAuth } from '@/composables/useAuth';
+import { useFinanceData } from '@/composables/useFinanceData';
+import { useSettings } from '@/composables/useSettings';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -18,10 +22,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import UserAvatar from './UserAvatar.vue';
+
+const emit = defineEmits<{ error: [message: string] }>();
 
 const { user, deleteAccount } = useAuth();
+const { settings } = useFinanceData();
+const { open: settingsOpen } = useSettings();
 
-const pictureFailed = ref(false);
+// The wizard replaces the app (App.vue) once the dialog is closed. What
+// already exists stays: its steps show it and only add to it.
+async function restartOnboarding() {
+  try {
+    const updated = await api.updateSettings({ onboardingDone: false });
+    settingsOpen.value = false;
+    settings.value = updated;
+  } catch (err) {
+    emit('error', (err as Error).message);
+  }
+}
 
 const confirmOpen = ref(false);
 const typed = ref('');
@@ -57,19 +76,22 @@ async function remove() {
     </header>
 
     <div class="flex items-center gap-3">
-      <img
-        v-if="user.picture && !pictureFailed"
-        :src="user.picture"
-        alt=""
-        referrerpolicy="no-referrer"
-        class="size-12 rounded-full"
-        @error="pictureFailed = true"
-      />
-      <CircleUser v-else class="size-12 text-muted-foreground" />
+      <UserAvatar :picture="user.picture" class="size-12" />
       <div class="flex min-w-0 flex-col">
         <span v-if="user.name" class="truncate font-medium">{{ user.name }}</span>
         <span class="truncate text-sm text-muted-foreground">{{ user.email }}</span>
       </div>
+    </div>
+
+    <div class="flex max-w-lg flex-col items-start gap-2 rounded-lg border p-4">
+      <h3 class="font-medium">Assistant de configuration</h3>
+      <p class="text-sm text-muted-foreground">
+        Reprendre les étapes du début : comptes, catégories, budget et import. Ce qui existe déjà est conservé.
+      </p>
+      <Button variant="outline" @click="restartOnboarding">
+        <RotateCcw />
+        Relancer l'assistant
+      </Button>
     </div>
 
     <div class="flex max-w-lg flex-col items-start gap-2 rounded-lg border border-destructive/30 p-4">
@@ -88,7 +110,8 @@ async function remove() {
               <AlertDialogTitle>Supprimer votre compte ?</AlertDialogTitle>
               <AlertDialogDescription>
                 Toutes vos données seront effacées définitivement. Pour confirmer, saisissez votre adresse
-                <strong class="font-medium text-foreground">{{ user.email }}</strong>.
+                <strong class="font-medium text-foreground">{{ user.email }}</strong
+                >.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div class="flex flex-col gap-2">

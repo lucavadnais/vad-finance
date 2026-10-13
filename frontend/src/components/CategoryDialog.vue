@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Creates a category (in `defaultGroup` if given), or edits `category`: name,
-// kind, group and color - a shade of the group's when in one. Opened through
-// v-model:open.
+// Creates a category (in `defaultGroup`, of `defaultKind`, if given), or
+// edits `category`: name, kind, group and color - a shade of the group's when
+// in one. Opened through v-model:open.
 import type { Category, CategoryGroup, CategoryKind } from '@/types';
 import { computed, ref, watch } from 'vue';
 import { Plus } from '@lucide/vue';
@@ -32,6 +32,8 @@ const props = defineProps<{
   groups: CategoryGroup[];
   // New category: the group it starts in (e.g. "+" on a group's row)
   defaultGroup?: string | null;
+  // New category: its kind to start with
+  defaultKind?: CategoryKind;
 }>();
 const emit = defineEmits<{ saved: [] }>();
 
@@ -61,7 +63,7 @@ watch(open, (value) => {
   if (!value) return;
   const c = props.category;
   name.value = c?.name ?? '';
-  kind.value = c?.kind ?? 'expense';
+  kind.value = c?.kind ?? props.defaultKind ?? 'expense';
   group.value = c?.group ?? props.defaultGroup ?? NO_GROUP;
   color.value = c?.color ?? null;
   shade.value = c?.shade ?? null;

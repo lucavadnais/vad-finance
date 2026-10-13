@@ -2,7 +2,9 @@
 // "Catégories et groupes" section of the settings: a toolbar to add a category
 // or a group, then the categories, by group. Each group's row shows its color,
 // a "+" adding a category straight into it, and a menu to edit or delete it.
-import type { Category, CategoryGroup } from '@/types';
+// Also the setup wizard's categories step (`wizard`): no header (the wizard
+// has its own), no archiving, and one kind at a time (Dépenses / Revenus).
+import type { Category, CategoryGroup, CategoryKind } from '@/types';
 import { computed, ref } from 'vue';
 import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { api } from '@/api';
@@ -19,13 +21,14 @@ import {
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CategoryDialog from './CategoryDialog.vue';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import GroupDialog from './GroupDialog.vue';
 import OptionSelect from './OptionSelect.vue';
 
-const props = defineProps<{ categories: Category[]; groups: CategoryGroup[] }>();
+const props = defineProps<{ categories: Category[]; groups: CategoryGroup[]; wizard?: boolean }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
 const { categoryColors } = useFinanceData();
@@ -37,8 +40,17 @@ const groupOptions = computed<Record<string, string>>(() => ({
   ...Object.fromEntries(props.groups.map((g) => [g._id, g.name])),
 }));
 
+// Wizard: the kind shown, picked above the table
+const kind = ref<CategoryKind>('expense');
+const shownCategories = computed(() =>
+  props.wizard ? props.categories.filter((c) => c.kind === kind.value) : props.categories,
+);
+const countOf = (k: CategoryKind) => props.categories.filter((c) => c.kind === k).length;
+// Columns: no "Type" in the wizard, the tabs give it
+const columns = computed(() => (props.wizard ? 3 : 4));
+
 const sorted = computed(() =>
-  [...props.categories].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name, 'fr')),
+  [...shownCategories.value].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name, 'fr')),
 );
 
 // Table display: one flat list, or a section per group (then "Sans groupe").
@@ -53,17 +65,25 @@ interface Section {
   items: Category[];
 }
 const sections = computed<Section[]>(() => {
-  if (!byGroup.value || props.groups.length === 0) {
+  if (!props.wizard && (!byGroup.value || props.groups.length === 0)) {
     return [{ key: 'all', title: null, group: null, items: activeFirst(sorted.value) }];
   }
   const groups = [...props.groups].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   return [
-    ...groups.map((g) => ({
-      key: g._id,
-      title: g.name,
-      group: g,
-      items: activeFirst(sorted.value.filter((c) => c.group === g._id)),
-    })),
+    ...groups
+      // Wizard: a group whose categories are all of the other kind shows there
+      .filter(
+        (g) =>
+          !props.wizard ||
+          !props.categories.some((c) => c.group === g._id) ||
+          sorted.value.some((c) => c.group === g._id),
+      )
+      .map((g) => ({
+        key: g._id,
+        title: g.name,
+        group: g,
+        items: activeFirst(sorted.value.filter((c) => c.group === g._id)),
+      })),
     { key: NO_GROUP, title: 'Sans groupe', group: null, items: activeFirst(sorted.value.filter((c) => !c.group)) },
   ].filter((section) => section.items.length > 0 || section.key !== NO_GROUP);
 });
@@ -110,9 +130,9 @@ const removeGroup = () => {
 </script>
 
 <template>
-  <!-- A section of the settings dialog -->
-  <section class="flex min-h-0 flex-1 flex-col gap-6">
-    <header class="flex flex-col gap-1 pr-6">
+  <!-- A section of the settings dialog (or the wizard's step) -->
+  <section class="flex min-h-0 flex-1 flex-col" :class="wizard ? 'gap-4' : 'gap-6'">
+    <header v-if="!wizard" class="flex flex-col gap-1 pr-6">
       <h2 class="text-lg font-semibold">Catégories et groupes</h2>
       <p class="text-sm text-muted-foreground">
         Pour classer les transactions en revenus et en dépenses. Les groupes rassemblent plusieurs catégories (ex.
@@ -121,7 +141,13 @@ const removeGroup = () => {
     </header>
 
     <div class="flex flex-wrap items-center gap-2">
-      <template v-if="groups.length > 0">
+      <Tabs v-if="wizard" v-model="kind">
+        <TabsList>
+          <TabsTrigger value="expense">Dépenses · {{ countOf('expense') }}</TabsTrigger>
+          <TabsTrigger value="income">Revenus · {{ countOf('income') }}</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <template v-else-if="groups.length > 0">
         <Switch id="categories-by-group" v-model="byGroup" />
         <Label for="categories-by-group" class="font-normal">Regrouper par groupe</Label>
       </template>
@@ -143,7 +169,7 @@ const removeGroup = () => {
         <TableHeader class="sticky top-0 z-10 bg-background">
           <TableRow>
             <TableHead>Nom</TableHead>
-            <TableHead>Type</TableHead>
+            <TableHead v-if="!wizard">Type</TableHead>
             <TableHead>Groupe</TableHead>
             <TableHead />
           </TableRow>
@@ -152,7 +178,7 @@ const removeGroup = () => {
           <template v-for="section in sections" :key="section.key">
             <!-- The group's row: its color, a "+" adding a category into it, its menu (edit, delete) -->
             <TableRow v-if="section.title" class="bg-muted/50 hover:bg-muted/50">
-              <TableCell colspan="4" class="py-1.5">
+              <TableCell :colspan="columns" class="py-1.5">
                 <div class="flex items-center gap-1">
                   <CategoryDot v-if="section.group" :color="section.group.color" class="mx-2.5 size-3" />
                   <span class="font-medium" :class="!section.group && 'pl-2'">{{ section.title }}</span>
@@ -188,7 +214,7 @@ const removeGroup = () => {
               </TableCell>
             </TableRow>
             <TableRow v-if="section.title && section.items.length === 0">
-              <TableCell colspan="4" class="text-muted-foreground">Aucune catégorie dans ce groupe</TableCell>
+              <TableCell :colspan="columns" class="text-muted-foreground">Aucune catégorie dans ce groupe</TableCell>
             </TableRow>
             <TableRow v-for="c in section.items" :key="c._id" :class="c.archived && 'text-muted-foreground'">
               <TableCell class="font-medium">
@@ -198,7 +224,7 @@ const removeGroup = () => {
                   <Badge v-if="c.archived" variant="outline" class="font-normal text-muted-foreground">Archivée</Badge>
                 </span>
               </TableCell>
-              <TableCell>
+              <TableCell v-if="!wizard">
                 <Badge :variant="c.kind === 'income' ? 'default' : 'secondary'">
                   {{ CATEGORY_KINDS[c.kind] }}
                 </Badge>
@@ -231,6 +257,7 @@ const removeGroup = () => {
                     <Pencil />
                   </Button>
                   <Button
+                    v-if="!wizard"
                     size="icon-sm"
                     variant="ghost"
                     :aria-label="`Archiver ${c.name}`"
@@ -241,7 +268,11 @@ const removeGroup = () => {
                   </Button>
                   <ConfirmDialog
                     :title="`Supprimer la catégorie « ${c.name} » ?`"
-                    description="Ses transactions deviendront sans catégorie. Pour garder l'historique, archivez-la plutôt."
+                    :description="
+                      wizard
+                        ? undefined
+                        : 'Ses transactions deviendront sans catégorie. Pour garder l\'historique, archivez-la plutôt.'
+                    "
                     @confirm="removeCategory(c)"
                   >
                     <Button size="icon-sm" variant="ghost" :aria-label="`Supprimer ${c.name}`">
@@ -252,7 +283,9 @@ const removeGroup = () => {
               </TableCell>
             </TableRow>
           </template>
-          <TableEmpty v-if="categories.length === 0" :colspan="4">Aucune catégorie</TableEmpty>
+          <TableEmpty v-if="shownCategories.length === 0 && sections.every((s) => !s.title)" :colspan="columns">
+            Aucune catégorie
+          </TableEmpty>
         </TableBody>
       </Table>
     </div>
@@ -261,6 +294,7 @@ const removeGroup = () => {
       v-model:open="categoryDialog.open"
       :category="categoryDialog.category"
       :default-group="categoryDialog.defaultGroup"
+      :default-kind="wizard ? kind : undefined"
       :groups="groups"
       @saved="emit('changed')"
     />

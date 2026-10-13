@@ -4,8 +4,7 @@ import { computed, ref, watch } from 'vue';
 import { api, toCents } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import BudgetBufferField from './BudgetBufferField.vue';
 
 const emit = defineEmits<{ error: [message: string] }>();
 
@@ -48,21 +47,10 @@ async function save() {
       <p class="text-sm text-muted-foreground">Comment vos dépenses réelles sont comparées à vos prévisions.</p>
     </header>
 
-    <form class="flex max-w-lg flex-col gap-2" @submit.prevent="save">
-      <Label for="budget-buffer">Marge mensuelle pour imprévus</Label>
-      <div class="flex gap-2">
-        <div class="relative w-40">
-          <Input id="budget-buffer" v-model="amount" inputmode="decimal" class="pr-7 text-right" />
-          <span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground"
-            >$</span
-          >
-        </div>
+    <form @submit.prevent="save">
+      <BudgetBufferField id="budget-buffer" v-model="amount">
         <Button type="submit" :disabled="!changed || saving">{{ saving ? 'Enregistrement…' : 'Enregistrer' }}</Button>
-      </div>
-      <p class="text-sm text-muted-foreground">
-        Mise de côté chaque mois pour les petites dépenses imprévues (un café, un lunch…). Elles ne comptent comme
-        dépassement qu'une fois la marge épuisée.
-      </p>
+      </BudgetBufferField>
     </form>
   </section>
 </template>

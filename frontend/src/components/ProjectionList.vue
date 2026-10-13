@@ -8,6 +8,7 @@ import { computed, ref } from 'vue';
 import { Search, X } from '@lucide/vue';
 import { formatCents, formatDate } from '@/api';
 import { nextDate, recurrenceLabel } from '@/lib/projections';
+import { normalizeText } from '@/lib/text';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ProjectionTable from './ProjectionTable.vue';
@@ -18,22 +19,17 @@ const emit = defineEmits<{ edit: [projection: Projection]; remove: [projection: 
 const search = ref('');
 
 // Accents and case do not matter: "electricite" finds "Électricité"
-const normalize = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
 // Escape clears the search first (in the dialog, it only closes it once empty)
 function clearOnEscape(e: KeyboardEvent) {
   if (!search.value) return;
   e.stopPropagation();
   search.value = '';
 }
-const query = computed(() => normalize(search.value.trim()));
+const query = computed(() => normalizeText(search.value));
 const matches = (p: Projection) => {
   const category = props.categories.find((c) => c._id === p.category)?.name ?? '';
   const text = [p.name, category, recurrenceLabel(p), formatCents(p.amountCents)].join(' ');
-  return normalize(text).includes(query.value);
+  return normalizeText(text).includes(query.value);
 };
 
 const rows = computed<ProjectionRow[]>(() =>

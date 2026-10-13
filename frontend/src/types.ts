@@ -176,4 +176,7 @@ export interface Settings {
   budgetBufferCents: number;
   // Charts show their axes (TrendChart)
   chartAxes: boolean;
+  // The setup wizard was finished or skipped (OnboardingPage). Unknown until
+  // the settings are loaded
+  onboardingDone?: boolean;
 }

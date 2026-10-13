@@ -1,9 +1,11 @@
 <script setup lang="ts">
 // Dialog that creates an account, or edits one when `account` is given. The
-// trigger is the default slot ("Ajouter un compte" button when empty).
+// trigger is the default slot ("Ajouter un compte" button when empty). A new
+// account has no initial balance yet: its first CSV import asks for its
+// current balance and works it out (AccountDialog); editing can change it.
 import type { Account, AccountType } from '@/types';
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { ImagePlus, Plus, Trash2, X } from '@lucide/vue';
+import { ImagePlus, Info, Plus, Trash2, X } from '@lucide/vue';
 import { accountLogoUrl, api, formatCents, LOGO_TYPES, toCents } from '@/api';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AccountDeleteDialog from './AccountDeleteDialog.vue';
+import InfoTooltip from './InfoTooltip.vue';
 import OptionSelect from './OptionSelect.vue';
 
 // `accounts`: all of them, to pick where the transactions go on delete
@@ -139,7 +142,13 @@ function askDelete() {
       <form class="flex flex-col gap-4" @submit.prevent="submit">
         <DialogHeader>
           <DialogTitle>{{ editing ? 'Modifier le compte' : 'Nouveau compte' }}</DialogTitle>
-          <DialogDescription>Le solde initial est le solde avant la première transaction.</DialogDescription>
+          <DialogDescription>
+            {{
+              editing
+                ? 'Son nom, son type, son solde initial et son image.'
+                : 'Un compte que vous voulez suivre : chèque, épargne, carte de crédit…'
+            }}
+          </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
@@ -147,13 +156,16 @@ function askDelete() {
             <Label for="account-name">Nom</Label>
             <Input id="account-name" v-model="name" placeholder="BNC - Compte chèque" required />
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid gap-4" :class="editing && 'grid-cols-2'">
             <div class="flex flex-col gap-2">
               <Label for="account-type">Type</Label>
               <OptionSelect id="account-type" v-model="type" :options="ACCOUNT_TYPES" class="w-full" />
             </div>
-            <div class="flex flex-col gap-2">
-              <Label for="account-balance">Solde initial</Label>
+            <div v-if="editing" class="flex flex-col gap-2">
+              <Label for="account-balance">
+                Solde initial
+                <InfoTooltip>Le solde du compte avant sa première transaction.</InfoTooltip>
+              </Label>
               <Input id="account-balance" v-model="initialBalance" inputmode="decimal" />
             </div>
           </div>
@@ -180,6 +192,12 @@ function askDelete() {
               Choisir une image
             </Button>
             <input ref="logoInput" type="file" :accept="LOGO_TYPES.join(',')" hidden @change="onLogoChange" />
+          </div>
+
+          <!-- A new account: where its balance will come from -->
+          <div v-if="!editing" class="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">
+            <Info class="mt-0.5 size-4 shrink-0" />
+            <p>Son solde vous sera demandé au premier import de relevé.</p>
           </div>
 
           <p v-if="error" class="text-sm text-destructive">{{ error }}</p>

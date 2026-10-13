@@ -1,9 +1,13 @@
 <script setup lang="ts">
 // Import preview: pick the account the statement belongs to, review and edit
-// each row (description, category), leave out duplicates, then import.
+// each row (description, category), leave out duplicates, then import. The
+// first import into an account (no transaction yet) asks for its current
+// balance, from which its initial balance is worked out.
 import type { Account, Category, DuplicateMatch, ImportSummary, ParsedCsv } from '@/types';
 import { computed, ref, watch } from 'vue';
-import { api, formatCents, formatDate } from '@/api';
+import { TriangleAlert } from '@lucide/vue';
+import { api, formatCents, formatDate, toCents } from '@/api';
+import { normalizeText } from '@/lib/text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,27 +28,22 @@ import CategorySelect, { TRANSFER } from './CategorySelect.vue';
 import ParseErrors from './ParseErrors.vue';
 
 const props = defineProps<{ accounts: Account[]; categories: Category[]; result: ParsedCsv }>();
-const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportSummary] }>();
+// `warning`: imported, but something after it failed (the initial balance)
+const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportSummary, warning?: string] }>();
 
 const accountId = ref<string | undefined>(props.accounts.length === 1 ? props.accounts[0]._id : undefined);
 const account = computed(() => props.accounts.find((a) => a._id === accountId.value));
 
 // Our category named like the bank's one, ignoring case and accents
-const normalize = (name: string) =>
-  name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
 // Archived categories are not picked for new transactions
-const categoryByName = new Map(props.categories.filter((c) => !c.archived).map((c) => [normalize(c.name), c._id]));
+const categoryByName = new Map(props.categories.filter((c) => !c.archived).map((c) => [normalizeText(c.name), c._id]));
 
 // Editable copy of the parsed rows. `category` may be TRANSFER: the row is then
 // a transfer to or from `transferAccount`
 const rows = ref(
   props.result.transactions.map((t) => ({
     ...t,
-    category: (t.bankCategory && categoryByName.get(normalize(t.bankCategory))) || null,
+    category: (t.bankCategory && categoryByName.get(normalizeText(t.bankCategory))) || null,
     transferAccount: undefined as string | undefined,
   })),
 );
@@ -87,6 +86,26 @@ watch(
 );
 
 const selectedCount = computed(() => selected.value.filter(Boolean).length);
+
+// First import into the account: its balance today, as the bank shows it,
+// after the statement's last transaction. Initial balance = that balance
+// minus what is imported. Left empty, the initial balance stays as it is.
+const firstImport = computed(() => account.value?.transactionCount === 0);
+const currentBalance = ref('');
+// "Importer" was clicked with no balance: warned once, the next click imports
+const balanceWarned = ref(false);
+watch(accountId, () => {
+  currentBalance.value = '';
+  balanceWarned.value = false;
+});
+const importedCents = computed(() =>
+  rows.value.reduce((sum, r, i) => (selected.value[i] ? sum + r.amountCents : sum), 0),
+);
+const initialCents = computed(() => {
+  if (!firstImport.value || !currentBalance.value.trim()) return null;
+  const cents = toCents(currentBalance.value);
+  return Number.isNaN(cents) ? NaN : cents - importedCents.value;
+});
 const exactCount = computed(() => [...duplicates.value.values()].filter((d) => d.kind === 'exact').length);
 const possibleCount = computed(() => duplicates.value.size - exactCount.value);
 
@@ -100,6 +119,15 @@ async function submit() {
   const isTransfer = (r: (typeof chosen)[number]) => r.category === TRANSFER;
   if (chosen.some((r) => isTransfer(r) && (!r.transferAccount || r.transferAccount === accountId.value))) {
     error.value = "Choisissez l'autre compte de chaque transfert";
+    return;
+  }
+  if (Number.isNaN(initialCents.value)) {
+    error.value = 'Solde invalide';
+    return;
+  }
+  if (firstImport.value && initialCents.value === null && !balanceWarned.value) {
+    balanceWarned.value = true;
+    document.getElementById('import-current-balance')?.focus();
     return;
   }
   saving.value = true;
@@ -118,7 +146,19 @@ async function submit() {
       allowDuplicates: true,
     });
     // Unchecked rows (duplicates left out) count as skipped
-    emit('done', account.value, { ...summary, skipped: summary.skipped + count.value - selectedCount.value });
+    const total = { ...summary, skipped: summary.skipped + count.value - selectedCount.value };
+    // After the import, so a failed import changes nothing; the transactions
+    // are in then, whatever happens here
+    let warning: string | undefined;
+    if (initialCents.value !== null) {
+      const { name, type } = account.value;
+      try {
+        await api.updateAccount(account.value._id, { name, type, initialBalanceCents: initialCents.value });
+      } catch (err) {
+        warning = `Le solde initial n'a pas pu être enregistré : ${(err as Error).message}`;
+      }
+    }
+    emit('done', account.value, total, warning);
   } catch (err) {
     error.value = (err as Error).message;
     saving.value = false;
@@ -204,6 +244,37 @@ async function submit() {
             </Table>
           </div>
 
+          <!-- First import into the account: its balance, set apart under the rows -->
+          <section v-if="firstImport && account" class="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
+            <Label for="import-current-balance" class="font-medium">Solde du compte aujourd'hui</Label>
+            <p class="text-sm text-muted-foreground">
+              C'est votre premier import dans « {{ account.name }} ». Entrez le solde que vous voyez en ce moment dans
+              votre appli bancaire.
+            </p>
+            <Input
+              id="import-current-balance"
+              v-model="currentBalance"
+              inputmode="decimal"
+              placeholder="0,00"
+              class="w-48"
+            />
+            <p v-if="initialCents !== null && !Number.isNaN(initialCents)" class="text-sm text-muted-foreground">
+              Solde avant ces transactions : {{ formatCents(initialCents, account.currency) }}
+            </p>
+            <!-- After "Importer" with nothing entered: a second click imports anyway -->
+            <div
+              v-if="balanceWarned && !currentBalance.trim()"
+              role="alert"
+              class="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <TriangleAlert class="mt-0.5 size-4 shrink-0" />
+              <span>
+                Sans solde, le compte partira de 0 $ et ne correspondra pas à votre banque. Vous pourrez le corriger
+                plus tard dans la fiche du compte.
+              </span>
+            </div>
+          </section>
+
           <p class="text-sm text-muted-foreground">
             <template v-if="!account">Choisissez le compte pour vérifier les doublons.</template>
             <template v-else-if="checking">Recherche des doublons…</template>
@@ -222,7 +293,13 @@ async function submit() {
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')"> Annuler </Button>
           <Button type="submit" :disabled="!account || saving || checking || selectedCount === 0">
-            {{ saving ? 'Import…' : 'Importer' }}
+            {{
+              saving
+                ? 'Import…'
+                : balanceWarned && firstImport && !currentBalance.trim()
+                  ? 'Importer quand même'
+                  : 'Importer'
+            }}
           </Button>
         </DialogFooter>
       </form>

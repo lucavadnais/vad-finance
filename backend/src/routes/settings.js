@@ -12,6 +12,7 @@ router.put('/', async (req, res) => {
   const settings = await getSettings(req.userId);
   if (req.body.budgetBufferCents !== undefined) settings.budgetBufferCents = req.body.budgetBufferCents;
   if (req.body.chartAxes !== undefined) settings.chartAxes = req.body.chartAxes;
+  if (req.body.onboardingDone !== undefined) settings.onboardingDone = req.body.onboardingDone;
   await settings.save();
   res.json(settings);
 });

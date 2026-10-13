@@ -279,6 +279,7 @@ const dayLabels = computed(() =>
           :percent="top.vsUsual"
           :previous="scope !== 'month'"
           dot
+          info
           align="end"
           class="shrink-0 pt-1 whitespace-nowrap"
         />

@@ -50,20 +50,3 @@ export async function usedColors(user, except = null) {
   return [...groups, ...categories].map((d) => d.color);
 }
 
-// Groups and categories saved before colors existed get one each, apart from
-// the other colors of their user. Those without a user yet (before
-// scripts/migrate-to-users.js) wait for it.
-export async function migrateColors() {
-  const noColor = { $or: [{ color: null }, { color: { $exists: false } }] };
-  const usedByUser = new Map();
-  for (const Model of [CategoryGroup, Category]) {
-    for (const d of await Model.find({ ...noColor, user: { $ne: null } }, '_id group user')) {
-      const key = String(d.user);
-      if (!usedByUser.has(key)) usedByUser.set(key, await usedColors(d.user));
-      const color = pickColor(usedByUser.get(key));
-      // A category in a group shows a shade of the group's color, not its own
-      if (!d.group) usedByUser.get(key).push(color);
-      await Model.updateOne({ _id: d._id, user: d.user }, { color });
-    }
-  }
-}

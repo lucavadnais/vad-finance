@@ -19,8 +19,7 @@ router.get('/config', (req, res) => {
 
 // Body: { credential }, the ID token Google's button hands the page. Checked
 // here (Google's signature, made for our client id, not expired), never trusted
-// as sent. The first sign-in creates the user, or links the one
-// scripts/migrate-to-users.js created with this email.
+// as sent. The first sign-in creates the user.
 router.post('/google', async (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) throw httpError(503, "La connexion Google n'est pas configurée (GOOGLE_CLIENT_ID)");
@@ -36,12 +35,7 @@ router.post('/google', async (req, res) => {
   if (!payload?.email || !payload.email_verified) throw httpError(401, 'Adresse Google non vérifiée');
 
   const profile = { email: payload.email, name: payload.name ?? '', picture: payload.picture ?? null };
-  let user = await User.findOne({ googleSub: payload.sub });
-  if (!user) {
-    user = await User.findOne({ email: payload.email.toLowerCase(), googleSub: null });
-    if (user) user.googleSub = payload.sub;
-    else user = new User({ googleSub: payload.sub });
-  }
+  const user = (await User.findOne({ googleSub: payload.sub })) ?? new User({ googleSub: payload.sub });
   // Kept up to date with the Google account
   user.set(profile);
   await user.save();

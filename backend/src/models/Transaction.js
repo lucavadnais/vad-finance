@@ -22,8 +22,11 @@ const transactionSchema = new mongoose.Schema(
 );
 
 transactionSchema.plugin(ownedPlugin);
-transactionSchema.index({ account: 1, date: -1 });
+// The index below starts with `user`: the plugin's own one would be redundant
+transactionSchema.path('user').index(false);
 // Transactions table: newest first, paginated
 transactionSchema.index({ user: 1, date: -1, _id: -1 });
+// One account's transactions (its list, import, transfers)
+transactionSchema.index({ user: 1, account: 1, date: -1, _id: -1 });
 
 export default mongoose.model('Transaction', transactionSchema);

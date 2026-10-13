@@ -50,17 +50,6 @@ Le backend vérifie le jeton remis par Google (signature, destinataire, expirati
 
 Chaque document (compte, transaction, catégorie…) porte le `user` à qui il appartient, et chaque requête filtre dessus. Les modèles refusent toute requête qui ne nomme pas d'utilisateur (`backend/src/lib/owned.js`). Un identifiant envoyé par le client (compte d'une transaction, groupe d'une catégorie…) doit aussi appartenir à l'utilisateur.
 
-#### Données créées avant les utilisateurs
-
-Elles n'ont pas de `user` et restent invisibles jusqu'à ce qu'on les attribue à quelqu'un. Dans le terminal du conteneur :
-
-```bash
-npm run migrate:users --prefix backend -- vous@gmail.com           # simulation : affiche ce qui changerait
-npm run migrate:users --prefix backend -- vous@gmail.com --apply   # migre
-```
-
-Le script attribue toutes ces données à cette adresse, en créant l'utilisateur s'il ne s'est jamais connecté (il est relié à sa première connexion Google), puis met les index à jour (noms de catégories uniques par utilisateur et non plus pour tous). Il s'arrête sans rien modifier si un nom de catégorie ou de groupe est déjà utilisé par cet utilisateur. Le relancer est sans effet. Faites une sauvegarde avant (`mongodump`).
-
 ### Commandes utiles
 
 Dans le terminal du conteneur (`docker compose exec app bash` hors VS Code) :
@@ -110,7 +99,6 @@ backend/
     routes/           # routes REST /api/*
     lib/auth.js       # sessions (cookie) et middleware requireAuth
     lib/owned.js      # isolation des données par utilisateur
-  scripts/            # migrate-to-users.js
 frontend/
   src/
     App.vue           # interface principale

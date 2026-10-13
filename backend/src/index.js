@@ -13,8 +13,6 @@ import transfersRouter from './routes/transfers.js';
 import duplicatesRouter from './routes/duplicates.js';
 import projectionsRouter from './routes/projections.js';
 import settingsRouter from './routes/settings.js';
-import { migrateProjections } from './models/Projection.js';
-import { migrateColors } from './lib/colors.js';
 
 const app = express();
 // No CORS: the frontend is served from the same address as the API (by Vite's
@@ -78,6 +76,4 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 3000;
 
 await connectDb(process.env.MONGO_URL);
-await migrateProjections();
-await migrateColors();
 app.listen(port, () => console.log(`API listening on port ${port}`));

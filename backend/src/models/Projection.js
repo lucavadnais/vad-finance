@@ -32,21 +32,3 @@ projectionSchema.plugin(ownedPlugin);
 const Projection = mongoose.model('Projection', projectionSchema);
 export default Projection;
 
-// Projections saved before `startDate` had `dayOfMonth`, `month` and `year`
-// instead: give them the start date those meant
-export async function migrateProjections() {
-  const old = await Projection.collection.find({ startDate: { $exists: false } }).toArray();
-  const now = new Date();
-  for (const p of old) {
-    const year = p.year ?? now.getUTCFullYear();
-    const month = (p.month ?? now.getUTCMonth() + 1) - 1;
-    const day = Math.min(p.dayOfMonth ?? 1, new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
-    await Projection.collection.updateOne(
-      { _id: p._id },
-      {
-        $set: { startDate: new Date(Date.UTC(year, month, day)), interval: 1 },
-        $unset: { dayOfMonth: '', month: '', year: '' },
-      },
-    );
-  }
-}

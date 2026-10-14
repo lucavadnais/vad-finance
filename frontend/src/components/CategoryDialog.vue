@@ -47,6 +47,7 @@ const groupOptions = computed<Record<string, string>>(() => ({
   [NO_GROUP]: 'Aucun groupe',
   ...Object.fromEntries(props.groups.map((g) => [g._id, g.name])),
 }));
+const groupColors = computed(() => Object.fromEntries(props.groups.map((g) => [g._id, g.color])));
 
 const name = ref('');
 const kind = ref<CategoryKind>('expense');
@@ -155,7 +156,13 @@ async function save() {
           <div class="grid grid-cols-2 gap-4">
             <div class="flex flex-col gap-2">
               <Label for="category-group">Groupe</Label>
-              <OptionSelect id="category-group" v-model="groupSelect" :options="groupOptions" class="w-full">
+              <OptionSelect
+                id="category-group"
+                v-model="groupSelect"
+                :options="groupOptions"
+                :colors="groupColors"
+                class="w-full"
+              >
                 <template #after>
                   <SelectSeparator />
                   <SelectItem :value="NEW_GROUP">

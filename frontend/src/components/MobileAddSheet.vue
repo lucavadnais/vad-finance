@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 import { ChevronLeft, ChevronRight, PencilLine, Upload } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { useCsvImport } from '@/composables/useCsvImport';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AccountDialog from './AccountDialog.vue';
 import ParseErrors from './ParseErrors.vue';
 import TransactionForm from './TransactionForm.vue';
@@ -45,25 +45,23 @@ const tile = 'flex size-9 shrink-0 items-center justify-center rounded-lg bg-pri
 </script>
 
 <template>
-  <Sheet v-model:open="open">
-    <SheetContent
-      side="bottom"
-      class="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-2xl pb-[calc(1rem+env(safe-area-inset-bottom))]"
-    >
+  <!-- Only on a phone, where the dialog is the bottom sheet -->
+  <Dialog v-model:open="open">
+    <DialogContent class="overflow-y-auto">
       <!-- Entering one by hand: no visible heading, the form says it already
            (kept for screen readers) -->
-      <SheetHeader :class="manual && 'sr-only'">
-        <SheetTitle>{{ manual ? 'Saisir une transaction' : 'Ajouter des transactions' }}</SheetTitle>
-        <SheetDescription>
+      <DialogHeader :class="manual && 'sr-only'">
+        <DialogTitle>{{ manual ? 'Saisir une transaction' : 'Ajouter des transactions' }}</DialogTitle>
+        <DialogDescription>
           {{
             manual
               ? 'Une transaction à ajouter à un de vos comptes.'
               : 'Importez le relevé de votre banque, ou saisissez une transaction.'
           }}
-        </SheetDescription>
-      </SheetHeader>
+        </DialogDescription>
+      </DialogHeader>
 
-      <div class="flex flex-col gap-3 px-4" :class="manual && 'pt-3'">
+      <div class="flex flex-col gap-3">
         <p v-if="accounts.length === 0" class="text-sm text-muted-foreground">
           Créez d'abord un compte dans l'onglet Accueil.
         </p>
@@ -106,8 +104,8 @@ const tile = 'flex size-9 shrink-0 items-center justify-center rounded-lg bg-pri
           </button>
         </template>
       </div>
-    </SheetContent>
-  </Sheet>
+    </DialogContent>
+  </Dialog>
 
   <!-- The usual import preview, over the sheet -->
   <AccountDialog

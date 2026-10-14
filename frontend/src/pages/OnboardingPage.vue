@@ -108,8 +108,12 @@ const firstName = computed(() => user.value?.name.split(' ')[0] ?? '');
         <h1 class="text-3xl font-semibold md:text-4xl">Bienvenue{{ firstName ? `, ${firstName}` : '' }} !</h1>
         <p class="text-muted-foreground">
           Prenons quelques instants pour configurer l'application à votre goût. Je vous conseille de prévoir une
-          quinzaine de minutes. Une fois l'application configurée selon vos besoins, vous verrez vos finances comme
-          jamais auparavant.
+          quinzaine de minutes. Une fois l'application configurée, vous serez en mesure de profiter pleinement de toutes
+          ses fonctionnalités.
+          <br /><br />
+          En espérant que cette application vous sera aussi utile qu'elle l'est pour moi.
+          <br /><br />
+          Luca
         </p>
       </div>
       <Button size="lg" class="self-start" @click="index = 0">Commencer</Button>

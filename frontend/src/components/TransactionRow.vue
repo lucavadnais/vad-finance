@@ -1,21 +1,18 @@
 <script setup lang="ts">
 // One transaction, compact: account image, date over description, category,
-// amount. "Modifier" in the actions menu asks the table to open the edit popup.
+// amount. "Modifier" in the actions menu (a sheet on a phone) asks the table
+// to open the edit popup.
 import type { Transaction } from '@/types';
+import type { SheetAction } from './ActionSheet.vue';
 import { computed, ref } from 'vue';
 import { ArrowLeft, ArrowRight, Ellipsis, Link2, Pencil, Trash2 } from '@lucide/vue';
 import { createReusableTemplate } from '@vueuse/core';
 import { api, formatCents, formatDate } from '@/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
 import AccountLogo from './AccountLogo.vue';
+import ActionMenu from './ActionMenu.vue';
 import { useFinanceData } from '@/composables/useFinanceData';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
@@ -32,6 +29,11 @@ const [DefineCategory, Category] = createReusableTemplate();
 
 const confirmOpen = ref(false);
 const linked = computed(() => !!props.transaction.transferPeer);
+
+const actions: SheetAction[] = [
+  { label: 'Modifier', icon: Pencil, run: () => emit('edit') },
+  { label: 'Supprimer', icon: Trash2, destructive: true, run: () => (confirmOpen.value = true) },
+];
 
 async function remove() {
   try {
@@ -82,23 +84,18 @@ async function remove() {
       {{ formatCents(transaction.amountCents) }}
     </TableCell>
     <TableCell v-if="!readonly" class="w-px pl-0 text-right">
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button size="icon-sm" variant="ghost" aria-label="Actions" title="Actions">
-            <Ellipsis />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem @select="emit('edit')">
-            <Pencil />
-            Modifier
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" @select="confirmOpen = true">
-            <Trash2 />
-            Supprimer
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ActionMenu
+        :title="transaction.description"
+        :description="`${formatDate(transaction.date)} · ${formatCents(transaction.amountCents)}`"
+        :actions="actions"
+      >
+        <Button size="icon-sm" variant="ghost" aria-label="Actions" title="Actions">
+          <Ellipsis />
+        </Button>
+        <template v-if="transaction.account" #icon>
+          <AccountLogo :account="transaction.account" class="size-6" />
+        </template>
+      </ActionMenu>
       <ConfirmDialog
         v-model:open="confirmOpen"
         title="Supprimer cette transaction ?"

@@ -35,15 +35,15 @@ const emit = defineEmits<{ add: []; edit: [projection: Projection]; remove: [pro
           @remove="emit('remove', $event)"
         >
           <template #actions>
-            <!-- Icon only on a phone, so the search keeps its room -->
+            <!-- Not on a phone: the search keeps the whole row -->
             <Button
-              class="shrink-0 max-sm:size-9"
+              class="shrink-0 max-sm:hidden"
               aria-label="Ajouter une prévision"
               title="Ajouter une prévision"
               @click="emit('add')"
             >
               <Plus />
-              <span class="max-sm:sr-only">Prévision</span>
+              Prévision
             </Button>
           </template>
         </ProjectionList>

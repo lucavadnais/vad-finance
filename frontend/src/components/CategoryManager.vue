@@ -1,15 +1,17 @@
 <script setup lang="ts">
-// "Catégories et groupes" section of the settings: a toolbar to add a category
-// or a group, then the categories, by group. Each group's row shows its color,
-// a "+" adding a category straight into it, and a menu to edit or delete it.
-// Also the setup wizard's categories step (`wizard`): no header (the wizard
-// has its own), no archiving, and one kind at a time (Dépenses / Revenus).
+// "Catégories et groupes" section of the settings: one kind at a time (Dépenses /
+// Revenus), a split button to add a group or a category, then the categories,
+// by group. Each group's row shows its color, a "+" adding a category straight
+// into it, and a menu to edit or delete it. On a phone, a "…" instead of the
+// actions, opening them in a sheet (ActionSheet).
+// Also the setup wizard's categories step (`wizard`): the same, without the
+// header (the wizard has its own) or archiving.
 import type { Category, CategoryGroup, CategoryKind } from '@/types';
+import type { SheetAction } from './ActionSheet.vue';
 import { computed, ref } from 'vue';
-import { Archive, ArchiveRestore, Ellipsis, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { Archive, ArchiveRestore, ChevronDown, Ellipsis, FolderPlus, Pencil, Plus, Trash2 } from '@lucide/vue';
 import { api } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
-import { CATEGORY_KINDS } from '@/lib/labels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,66 +20,52 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ActionSheet from './ActionSheet.vue';
 import CategoryDialog from './CategoryDialog.vue';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import GroupDialog from './GroupDialog.vue';
-import OptionSelect from './OptionSelect.vue';
 
 const props = defineProps<{ categories: Category[]; groups: CategoryGroup[]; wizard?: boolean }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
 const { categoryColors } = useFinanceData();
 
-// Select items cannot have an empty value, so "no group" uses a sentinel
+// "No group" uses a sentinel key
 const NO_GROUP = 'none';
 const groupOptions = computed<Record<string, string>>(() => ({
   [NO_GROUP]: 'Aucun groupe',
   ...Object.fromEntries(props.groups.map((g) => [g._id, g.name])),
 }));
 
-// Wizard: the kind shown, picked above the table
+// The kind shown, picked above the table
 const kind = ref<CategoryKind>('expense');
-const shownCategories = computed(() =>
-  props.wizard ? props.categories.filter((c) => c.kind === kind.value) : props.categories,
-);
+const shownCategories = computed(() => props.categories.filter((c) => c.kind === kind.value));
 const countOf = (k: CategoryKind) => props.categories.filter((c) => c.kind === k).length;
-// Columns: no "Type" in the wizard, the tabs give it
-const columns = computed(() => (props.wizard ? 3 : 4));
+// Name, actions: no "Type" (the tabs give it) nor "Groupe" (the sections
+// give it; it changes in the category's dialog)
+const columns = 2;
 
-const sorted = computed(() =>
-  [...shownCategories.value].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name, 'fr')),
-);
+const sorted = computed(() => [...shownCategories.value].sort((a, b) => a.name.localeCompare(b.name, 'fr')));
 
-// Table display: one flat list, or a section per group (then "Sans groupe").
-// Archived categories stay in place, after the active ones of their section.
-const byGroup = ref(true);
+// A section per group (then "Sans groupe"). Archived categories stay in place,
+// after the active ones of their section.
 const activeFirst = (items: Category[]) => [...items].sort((a, b) => Number(a.archived) - Number(b.archived));
 interface Section {
   key: string;
-  title: string | null;
-  // The group behind the section; null for "Sans groupe" and the flat list
+  title: string;
+  // The group behind the section; null for "Sans groupe"
   group: CategoryGroup | null;
   items: Category[];
 }
 const sections = computed<Section[]>(() => {
-  if (!props.wizard && (!byGroup.value || props.groups.length === 0)) {
-    return [{ key: 'all', title: null, group: null, items: activeFirst(sorted.value) }];
-  }
   const groups = [...props.groups].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   return [
     ...groups
-      // Wizard: a group whose categories are all of the other kind shows there
-      .filter(
-        (g) =>
-          !props.wizard ||
-          !props.categories.some((c) => c.group === g._id) ||
-          sorted.value.some((c) => c.group === g._id),
-      )
+      // A group whose categories are all of the other kind shows there
+      .filter((g) => !props.categories.some((c) => c.group === g._id) || sorted.value.some((c) => c.group === g._id))
       .map((g) => ({
         key: g._id,
         title: g.name,
@@ -105,6 +93,57 @@ function askDeleteGroup(group: CategoryGroup) {
   confirmDelete.value = true;
 }
 
+// Category deleted after confirming
+const deletingCategory = ref<Category | null>(null);
+const confirmDeleteCategory = ref(false);
+function askDeleteCategory(category: Category) {
+  deletingCategory.value = category;
+  confirmDeleteCategory.value = true;
+}
+
+// Phone: the actions of a category or a section, in a sheet
+const sheet = ref({
+  open: false,
+  title: '',
+  description: '',
+  color: undefined as string | undefined,
+  actions: [] as SheetAction[],
+});
+function categoryActions(c: Category) {
+  const actions: SheetAction[] = c.archived
+    ? [{ label: 'Désarchiver', icon: ArchiveRestore, run: () => setArchived(c, false) }]
+    : [
+        { label: 'Modifier', icon: Pencil, run: () => openCategory(c) },
+        ...(props.wizard ? [] : [{ label: 'Archiver', icon: Archive, run: () => setArchived(c, true) }]),
+        { label: 'Supprimer', icon: Trash2, destructive: true, run: () => askDeleteCategory(c) },
+      ];
+  sheet.value = {
+    open: true,
+    title: c.name,
+    description: [groupOptions.value[c.group ?? NO_GROUP], c.archived && 'Archivée'].filter(Boolean).join(' · '),
+    color: categoryColors.value.get(c._id),
+    actions,
+  };
+}
+function sectionActions(section: Section) {
+  const group = section.group;
+  sheet.value = {
+    open: true,
+    title: section.title,
+    description: `${section.items.length} catégorie${section.items.length > 1 ? 's' : ''}`,
+    color: group?.color,
+    actions: [
+      { label: 'Ajouter une catégorie', icon: Plus, run: () => openCategory(null, group?._id ?? null) },
+      ...(group
+        ? [
+            { label: 'Modifier le groupe', icon: Pencil, run: () => openGroup(group) },
+            { label: 'Supprimer le groupe', icon: Trash2, destructive: true, run: () => askDeleteGroup(group) },
+          ]
+        : []),
+    ],
+  };
+}
+
 async function run(action: () => Promise<unknown>) {
   try {
     await action();
@@ -114,10 +153,10 @@ async function run(action: () => Promise<unknown>) {
   }
 }
 
-const setGroup = (category: Category, value: string | undefined) =>
-  run(() => api.updateCategory(category._id, { group: !value || value === NO_GROUP ? null : value }));
-
-const removeCategory = (category: Category) => run(() => api.deleteCategory(category._id));
+const removeCategory = () => {
+  const category = deletingCategory.value;
+  if (category) run(() => api.deleteCategory(category._id));
+};
 
 // Archived: kept on its transactions, no longer offered when picking a category
 const setArchived = (category: Category, archived: boolean) =>
@@ -135,30 +174,47 @@ const removeGroup = () => {
     <header v-if="!wizard" class="flex flex-col gap-1 pr-6">
       <h2 class="text-lg font-semibold">Catégories et groupes</h2>
       <p class="text-sm text-muted-foreground">
-        Pour classer les transactions en revenus et en dépenses. Les groupes rassemblent plusieurs catégories (ex.
-        Électricité et Internet dans « Milieu de vie ») pour l'analyse, dans des nuances de leur couleur.
+        Classer les transactions selon s'ils sont des revenus ou des dépenses. Regrouper les catégories dans des groupes
+        permet une meilleure analyse.
       </p>
     </header>
 
     <div class="flex flex-wrap items-center gap-2">
-      <Tabs v-if="wizard" v-model="kind">
+      <Tabs v-model="kind">
         <TabsList>
           <TabsTrigger value="expense">Dépenses · {{ countOf('expense') }}</TabsTrigger>
           <TabsTrigger value="income">Revenus · {{ countOf('income') }}</TabsTrigger>
         </TabsList>
       </Tabs>
-      <template v-else-if="groups.length > 0">
-        <Switch id="categories-by-group" v-model="byGroup" />
-        <Label for="categories-by-group" class="font-normal">Regrouper par groupe</Label>
-      </template>
-      <Button variant="outline" class="ml-auto" @click="openGroup(null)">
-        <Plus />
-        Groupe
-      </Button>
-      <Button @click="openCategory(null)">
-        <Plus />
-        Catégorie
-      </Button>
+      <!-- Split button: adds a group, its arrow offers a category -->
+      <div class="ml-auto flex">
+        <Button class="rounded-r-none" @click="openGroup(null)">
+          <FolderPlus />
+          Groupe
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button
+              size="icon"
+              class="rounded-l-none border-l border-primary-foreground/25"
+              aria-label="Autres ajouts"
+              title="Autres ajouts"
+            >
+              <ChevronDown />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem @select="openGroup(null)">
+              <FolderPlus />
+              Nouveau groupe
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="openCategory(null)">
+              <Plus />
+              Nouvelle catégorie
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
 
     <!-- Only the list scrolls, under a sticky header -->
@@ -169,24 +225,31 @@ const removeGroup = () => {
         <TableHeader class="sticky top-0 z-10 bg-background">
           <TableRow>
             <TableHead>Nom</TableHead>
-            <TableHead v-if="!wizard">Type</TableHead>
-            <TableHead>Groupe</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
         <TableBody>
           <template v-for="section in sections" :key="section.key">
             <!-- The group's row: its color, a "+" adding a category into it, its menu (edit, delete) -->
-            <TableRow v-if="section.title" class="bg-muted/50 hover:bg-muted/50">
+            <TableRow class="bg-muted/50 hover:bg-muted/50">
               <TableCell :colspan="columns" class="py-1.5">
                 <div class="flex items-center gap-1">
                   <CategoryDot v-if="section.group" :color="section.group.color" class="mx-2.5 size-3" />
                   <span class="font-medium" :class="!section.group && 'pl-2'">{{ section.title }}</span>
                   <span class="text-muted-foreground">· {{ section.items.length }}</span>
                   <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    class="ml-auto sm:hidden"
+                    :aria-label="`Actions de ${section.title}`"
+                    @click="sectionActions(section)"
+                  >
+                    <Ellipsis />
+                  </Button>
+                  <Button
                     size="sm"
                     variant="ghost"
-                    class="ml-auto text-muted-foreground"
+                    class="ml-auto text-muted-foreground max-sm:hidden"
                     :aria-label="`Ajouter une catégorie à ${section.title}`"
                     @click="openCategory(null, section.group?._id ?? null)"
                   >
@@ -195,7 +258,12 @@ const removeGroup = () => {
                   </Button>
                   <DropdownMenu v-if="section.group">
                     <DropdownMenuTrigger as-child>
-                      <Button size="icon-sm" variant="ghost" :aria-label="`Actions du groupe ${section.title}`">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        class="max-sm:hidden"
+                        :aria-label="`Actions du groupe ${section.title}`"
+                      >
                         <Ellipsis />
                       </Button>
                     </DropdownMenuTrigger>
@@ -213,7 +281,7 @@ const removeGroup = () => {
                 </div>
               </TableCell>
             </TableRow>
-            <TableRow v-if="section.title && section.items.length === 0">
+            <TableRow v-if="section.items.length === 0">
               <TableCell :colspan="columns" class="text-muted-foreground">Aucune catégorie dans ce groupe</TableCell>
             </TableRow>
             <TableRow v-for="c in section.items" :key="c._id" :class="c.archived && 'text-muted-foreground'">
@@ -224,26 +292,21 @@ const removeGroup = () => {
                   <Badge v-if="c.archived" variant="outline" class="font-normal text-muted-foreground">Archivée</Badge>
                 </span>
               </TableCell>
-              <TableCell v-if="!wizard">
-                <Badge :variant="c.kind === 'income' ? 'default' : 'secondary'">
-                  {{ CATEGORY_KINDS[c.kind] }}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <!-- Nothing changes on an archived category -->
-                <span v-if="c.archived" class="px-3 text-sm">{{ groupOptions[c.group ?? NO_GROUP] }}</span>
-                <OptionSelect
-                  v-else
-                  :model-value="c.group ?? NO_GROUP"
-                  :options="groupOptions"
-                  class="w-44"
-                  @update:model-value="setGroup(c, $event)"
-                />
-              </TableCell>
               <TableCell class="text-right whitespace-nowrap">
+                <!-- Phone: the actions in a sheet -->
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  class="sm:hidden"
+                  :aria-label="`Actions de ${c.name}`"
+                  @click="categoryActions(c)"
+                >
+                  <Ellipsis />
+                </Button>
                 <!-- Archived: it can only be unarchived -->
                 <Button
                   v-if="c.archived"
+                  class="max-sm:hidden"
                   size="sm"
                   variant="ghost"
                   :aria-label="`Désarchiver ${c.name}`"
@@ -252,7 +315,7 @@ const removeGroup = () => {
                   <ArchiveRestore />
                   Désarchiver
                 </Button>
-                <template v-else>
+                <span v-else class="max-sm:hidden">
                   <Button size="icon-sm" variant="ghost" :aria-label="`Modifier ${c.name}`" @click="openCategory(c)">
                     <Pencil />
                   </Button>
@@ -266,26 +329,19 @@ const removeGroup = () => {
                   >
                     <Archive />
                   </Button>
-                  <ConfirmDialog
-                    :title="`Supprimer la catégorie « ${c.name} » ?`"
-                    :description="
-                      wizard
-                        ? undefined
-                        : 'Ses transactions deviendront sans catégorie. Pour garder l\'historique, archivez-la plutôt.'
-                    "
-                    @confirm="removeCategory(c)"
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    :aria-label="`Supprimer ${c.name}`"
+                    @click="askDeleteCategory(c)"
                   >
-                    <Button size="icon-sm" variant="ghost" :aria-label="`Supprimer ${c.name}`">
-                      <Trash2 />
-                    </Button>
-                  </ConfirmDialog>
-                </template>
+                    <Trash2 />
+                  </Button>
+                </span>
               </TableCell>
             </TableRow>
           </template>
-          <TableEmpty v-if="shownCategories.length === 0 && sections.every((s) => !s.title)" :colspan="columns">
-            Aucune catégorie
-          </TableEmpty>
+          <TableEmpty v-if="sections.length === 0" :colspan="columns"> Aucune catégorie </TableEmpty>
         </TableBody>
       </Table>
     </div>
@@ -294,11 +350,31 @@ const removeGroup = () => {
       v-model:open="categoryDialog.open"
       :category="categoryDialog.category"
       :default-group="categoryDialog.defaultGroup"
-      :default-kind="wizard ? kind : undefined"
+      :default-kind="kind"
       :groups="groups"
       @saved="emit('changed')"
     />
     <GroupDialog v-model:open="groupDialog.open" :group="groupDialog.group" @saved="emit('changed')" />
+    <ActionSheet
+      v-model:open="sheet.open"
+      :title="sheet.title"
+      :description="sheet.description"
+      :actions="sheet.actions"
+    >
+      <template v-if="sheet.color" #icon>
+        <CategoryDot :color="sheet.color" class="size-4" />
+      </template>
+    </ActionSheet>
+    <ConfirmDialog
+      v-model:open="confirmDeleteCategory"
+      :title="`Supprimer la catégorie « ${deletingCategory?.name} » ?`"
+      :description="
+        wizard
+          ? undefined
+          : 'Ses transactions deviendront sans catégorie. Pour garder l\'historique, archivez-la plutôt.'
+      "
+      @confirm="removeCategory"
+    />
     <ConfirmDialog
       v-model:open="confirmDelete"
       :title="`Supprimer le groupe « ${deleting?.name} » ?`"

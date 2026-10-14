@@ -2,7 +2,7 @@
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
 import { X } from "@lucide/vue"
-import { reactiveOmit } from "@vueuse/core"
+import { reactiveOmit, useMediaQuery } from "@vueuse/core"
 import {
   DialogClose,
   DialogContent,
@@ -10,6 +10,7 @@ import {
   useForwardPropsEmits,
 } from "reka-ui"
 import { cn } from "@/lib/utils"
+import { SheetContent } from "@/components/ui/sheet"
 import DialogOverlay from "./DialogOverlay.vue"
 
 defineOptions({
@@ -24,18 +25,28 @@ const emits = defineEmits<DialogContentEmits>()
 const delegatedProps = reactiveOmit(props, "class")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+const phone = useMediaQuery("(max-width: 639px)")
 </script>
 
 <template>
-  <!-- Phone (below sm): full screen, so the content has room -->
-  <DialogPortal>
+  <!-- Phone (below sm): the bottom sheet, like the one to add transactions -->
+  <SheetContent
+    v-if="phone"
+    side="bottom"
+    v-bind="{ ...$attrs, ...forwarded }"
+    :class="cn('px-6 pt-6 [&>form]:min-h-0', props.class)"
+  >
+    <slot />
+  </SheetContent>
+  <DialogPortal v-else>
     <DialogOverlay />
     <DialogContent
       data-slot="dialog-content"
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(
-          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] flex-col [&>form]:min-h-0 translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg max-sm:inset-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0',
+          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] flex-col [&>form]:min-h-0 translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg',
           props.class,
         )"
     >

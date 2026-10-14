@@ -33,13 +33,15 @@ const props = defineProps<{
   class?: HTMLAttributes['class'];
 }>();
 
-const { categoryColors } = useFinanceData();
+const { categoryColors, settings } = useFinanceData();
 
 // Select items cannot have an empty value, so "no category" uses a sentinel
 const NONE = 'none';
-// Last item: opens the settings on the categories, without changing the value
+// Last item: opens the settings on the categories, without changing the value.
+// Not in the setup wizard: the settings are out of its reach
 const MANAGE = 'manage';
 const { openSettings } = useSettings();
+const canManage = computed(() => settings.value.onboardingDone !== false);
 const value = computed({
   get: () => model.value ?? NONE,
   set: (v: string) => {
@@ -81,11 +83,13 @@ const groups = computed(() =>
         <SelectSeparator />
         <SelectItem :value="TRANSFER">Transfert</SelectItem>
       </template>
-      <SelectSeparator />
-      <SelectItem :value="MANAGE" class="text-muted-foreground">
-        <Settings2 />
-        Gérer les catégories…
-      </SelectItem>
+      <template v-if="canManage">
+        <SelectSeparator />
+        <SelectItem :value="MANAGE" class="text-muted-foreground">
+          <Settings2 />
+          Gérer les catégories…
+        </SelectItem>
+      </template>
     </SelectContent>
   </Select>
 </template>

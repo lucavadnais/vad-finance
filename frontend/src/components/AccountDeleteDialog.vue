@@ -182,16 +182,9 @@ async function confirm() {
         <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
       </DialogBody>
 
-      <DialogFooter>
-        <Button
-          v-if="step === 'confirm' && count > 0"
-          variant="ghost"
-          class="sm:mr-auto"
-          :disabled="busy"
-          @click="step = 'choose'"
-        >
-          Retour
-        </Button>
+      <!-- The last step, on a phone: top to bottom in the written order (Annuler,
+           then deleting under the thumb) rather than the footer's reversed one -->
+      <DialogFooter :class="step === 'confirm' && 'max-sm:flex-col'">
         <Button variant="outline" :disabled="busy" @click="onOpenChange(false)">Annuler</Button>
         <Button v-if="step === 'choose'" @click="step = 'confirm'">Continuer</Button>
         <Button v-else :variant="moving ? 'default' : 'destructive'" :disabled="!canConfirm" @click="confirm">

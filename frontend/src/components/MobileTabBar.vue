@@ -4,15 +4,17 @@ export type HomeTab = 'home' | 'spending' | 'budget' | 'analysis';
 
 <script setup lang="ts">
 // Floating tab bar at the bottom of a phone screen: one tab per card of the
-// home page. Hidden from tablet up, where every card shows at once.
+// home page, and in the middle a "+" adding transactions (`add`: the parent
+// opens its sheet). Hidden from tablet up, where every card shows at once.
 import type { Component } from 'vue';
 import { computed, ref } from 'vue';
 import { useEventListener } from '@vueuse/core';
-import { ArrowLeftRight, ChartColumn, House, PiggyBank } from '@lucide/vue';
+import { ArrowLeftRight, ChartColumn, House, PiggyBank, Plus } from '@lucide/vue';
 
 // A red dot on a tab with something to review (transfers, duplicates)
 defineProps<{ alerts?: Partial<Record<HomeTab, boolean>> }>();
 const tab = defineModel<HomeTab>({ required: true });
+const emit = defineEmits<{ add: [] }>();
 
 const TABS: { value: HomeTab; label: string; icon: Component }[] = [
   { value: 'home', label: 'Accueil', icon: House },
@@ -37,10 +39,15 @@ useEventListener(
   { passive: true },
 );
 
+// Five slots: two tabs, the "+", two tabs. The active tab's slot, for its pill
+const ADD_SLOT = 2;
+const slotOf = (i: number) => (i < ADD_SLOT ? i : i + 1);
 const active = computed(() =>
-  Math.max(
-    0,
-    TABS.findIndex((t) => t.value === tab.value),
+  slotOf(
+    Math.max(
+      0,
+      TABS.findIndex((t) => t.value === tab.value),
+    ),
   ),
 );
 </script>
@@ -54,25 +61,37 @@ const active = computed(() =>
     <!-- The active tab's pill, one tab wide, sliding to the tab picked -->
     <span
       aria-hidden="true"
-      class="absolute inset-y-1.5 left-1.5 w-[calc((100%-0.75rem)/4)] rounded-full bg-white/15 transition-transform duration-300 ease-out motion-reduce:transition-none"
+      class="absolute inset-y-1.5 left-1.5 w-[calc((100%-0.75rem)/5)] rounded-full bg-white/15 transition-transform duration-300 ease-out motion-reduce:transition-none"
       :style="{ transform: `translateX(${active * 100}%)` }"
     />
-    <button
-      v-for="t in TABS"
-      :key="t.value"
-      type="button"
-      :aria-label="t.label"
-      :title="t.label"
-      :aria-current="tab === t.value ? 'page' : undefined"
-      class="relative flex h-13 flex-1 items-center justify-center rounded-full text-muted-foreground transition-colors duration-300"
-      :class="tab === t.value && 'text-card-foreground'"
-      @click="tab = t.value"
-    >
-      <component :is="t.icon" class="size-6" :stroke-width="tab === t.value ? 2.25 : 1.75" />
-      <span
-        v-if="alerts?.[t.value]"
-        class="absolute top-1/2 left-1/2 mt-1.5 ml-2 size-2.5 rounded-full bg-destructive ring-2 ring-card"
-      />
-    </button>
+    <template v-for="(t, i) in TABS" :key="t.value">
+      <!-- Adding transactions, in the middle: a round button, not a tab -->
+      <span v-if="i === ADD_SLOT" class="relative flex flex-1 items-center justify-center">
+        <button
+          type="button"
+          aria-label="Ajouter des transactions"
+          title="Ajouter des transactions"
+          class="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-transform outline-none active:scale-95 focus-visible:ring-3 focus-visible:ring-ring/50"
+          @click="emit('add')"
+        >
+          <Plus class="size-6" :stroke-width="2.25" />
+        </button>
+      </span>
+      <button
+        type="button"
+        :aria-label="t.label"
+        :title="t.label"
+        :aria-current="tab === t.value ? 'page' : undefined"
+        class="relative flex h-13 flex-1 items-center justify-center rounded-full text-muted-foreground transition-colors duration-300"
+        :class="tab === t.value && 'text-card-foreground'"
+        @click="tab = t.value"
+      >
+        <component :is="t.icon" class="size-6" :stroke-width="tab === t.value ? 2.25 : 1.75" />
+        <span
+          v-if="alerts?.[t.value]"
+          class="absolute top-1/2 left-1/2 mt-1.5 ml-2 size-2.5 rounded-full bg-destructive ring-2 ring-card"
+        />
+      </button>
+    </template>
   </nav>
 </template>

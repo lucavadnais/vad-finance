@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ChartLine, Eye, EyeOff, Pencil, Plus, Table2, X } from '@lucide/vue';
 import { formatCents } from '@/api';
@@ -21,6 +21,7 @@ import AccountLogo from '@/components/AccountLogo.vue';
 import CsvImport from '@/components/CsvImport.vue';
 import MobileTabBar, { type HomeTab } from '@/components/MobileTabBar.vue';
 import DuplicateDialog from '@/components/DuplicateDialog.vue';
+import MobileAddSheet from '@/components/MobileAddSheet.vue';
 import MobileHome from '@/components/MobileHome.vue';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TrendChart from '@/components/TrendChart.vue';
@@ -135,19 +136,25 @@ const tab = computed<HomeTab>({
 });
 const onPhone = (t: HomeTab) => tab.value !== t && 'max-md:hidden';
 watch(tab, () => window.scrollTo({ top: 0 }));
+// Phone: the add sheet, opened by the "+" of the tab bar
+const addOpen = ref(false);
 const tabAlerts = computed(() => ({
   spending: transferCandidates.value.length > 0 || duplicatePairs.value.length > 0,
 }));
 </script>
 
 <template>
-  <!-- Mobile: one column. Tablet: accounts and import side by side, transactions
-       below them. Desktop: the three become a sidebar next to forecasts and charts -->
+  <!-- Phone and portrait tablet: one column (accounts, adding transactions, the
+       transactions, then the rest). Landscape tablet: accounts and import side
+       by side, transactions below them. Desktop: the three become a sidebar
+       next to forecasts and charts -->
   <!-- Phone: room at the bottom for the tab bar -->
-  <div class="grid grid-cols-1 gap-6 max-md:pb-24 md:grid-cols-2 xl:grid-cols-[minmax(32rem,2fr)_3fr]">
+  <div class="grid grid-cols-1 gap-6 max-md:pb-24 lg:grid-cols-2 xl:grid-cols-[minmax(32rem,2fr)_3fr]">
     <!-- Desktop: [contain:size] keeps the sidebar out of the row height, so it
          stretches to the forecasts and charts column, and the transactions fill
-         what is left (scrolling inside) instead of pushing the page longer -->
+         what is left (scrolling inside) instead of pushing the page longer. When
+         that column is short, the transactions keep a minimum height (a few
+         rows besides their header and pagination) and the page grows instead -->
     <aside class="contents xl:flex xl:flex-col xl:gap-6 xl:[contain:size]">
       <MobileHome
         :accounts="accounts"
@@ -296,9 +303,9 @@ const tabAlerts = computed(() => ({
       <!-- Not scroll anchors (both): on a phone they follow the month card, and
            when it gets shorter (grouping its categories) the browser would scroll
            the page up to keep them in place, moving the switch under the finger -->
+      <!-- Phone: the "+" of the tab bar opens the add sheet instead -->
       <CsvImport
-        class="[overflow-anchor:none]"
-        :class="onPhone('spending')"
+        class="[overflow-anchor:none] max-md:hidden"
         :accounts="accounts"
         :categories="categories"
         @imported="refreshAfterAdd"
@@ -307,7 +314,7 @@ const tabAlerts = computed(() => ({
       />
 
       <TransactionsTable
-        class="min-w-0 [overflow-anchor:none] md:col-span-2 xl:col-span-1 xl:min-h-80 xl:flex-1"
+        class="min-w-0 [overflow-anchor:none] lg:col-span-2 xl:col-span-1 xl:min-h-[32rem] xl:flex-1"
         :class="onPhone('spending')"
         :accounts="accounts"
         :categories="categories"
@@ -319,7 +326,7 @@ const tabAlerts = computed(() => ({
     </aside>
 
     <!-- Phone: steps aside, so the month's spending can lead its tab -->
-    <div class="flex min-w-0 flex-col gap-6 max-md:contents md:col-span-2 xl:col-span-1">
+    <div class="flex min-w-0 flex-col gap-6 max-md:contents lg:col-span-2 xl:col-span-1">
       <SpendInsights
         v-model="projectionMonth"
         :transactions="transactions"
@@ -353,7 +360,15 @@ const tabAlerts = computed(() => ({
 
     <!-- Opened after an addition that brought new pairs, or from a transaction's
          icon. Rendered on the body: no room taken in the grid. -->
-    <MobileTabBar v-model="tab" :alerts="tabAlerts" />
+    <MobileTabBar v-model="tab" :alerts="tabAlerts" @add="addOpen = true" />
+    <MobileAddSheet
+      v-model:open="addOpen"
+      :accounts="accounts"
+      :categories="categories"
+      @imported="refreshAfterAdd"
+      @created="refreshAfterAdd"
+      @error="setError"
+    />
 
     <TransferDialog @changed="refresh" @error="setError" />
     <DuplicateDialog @changed="refresh" @error="setError" />

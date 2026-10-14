@@ -32,6 +32,16 @@ docker compose up --build
 - API : http://localhost:3000/api/health
 - Base de données : `mongodb://localhost:27017/finance` depuis Windows (ex. [MongoDB Compass](https://www.mongodb.com/products/tools/compass)), `mongodb://mongo:27017/finance` depuis le conteneur. Sans mot de passe, accessible uniquement depuis cette machine.
 
+#### Base locale ou MongoDB Atlas
+
+Par défaut, l'app utilise la base locale (le conteneur `mongo`). Pour utiliser un cluster MongoDB Atlas, ajoutez son adresse dans le fichier `.env` à la racine, puis redémarrez les conteneurs (`docker compose up -d`, ou **Dev Containers: Rebuild Container** dans VS Code) :
+
+```bash
+MONGO_URL=mongodb+srv://utilisateur:mot-de-passe@cluster0.xxxxx.mongodb.net/finance?retryWrites=true&w=majority
+```
+
+Commentez ou retirez la ligne pour revenir à la base locale. Au démarrage, le backend affiche la base utilisée (`Connected to MongoDB: …`). Dans Atlas, autorisez votre adresse IP (**Network Access**) ; gardez `/finance` dans l'adresse, sinon la base s'appelle `test`. Un caractère spécial dans le mot de passe (`@`, `:`, `/`…) doit être encodé (`@` → `%40`).
+
 Les dépendances npm sont installées automatiquement à chaque démarrage du conteneur, et le code est rechargé à chaque modification.
 
 ### Connexion avec Google

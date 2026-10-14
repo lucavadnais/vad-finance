@@ -58,9 +58,11 @@ watch(settingsOpen, (open) => {
 </script>
 
 <template>
-  <!-- Nothing while the session is checked, so the sign-in page does not flash;
-       nor while the settings load, so the app does not flash before the wizard -->
-  <SignInPage v-if="user === null" />
+  <!-- The public pages (legal), signed in or not. Otherwise nothing while the
+       session is checked, so the sign-in page does not flash; nor while the
+       settings load, so the app does not flash before the wizard -->
+  <RouterView v-if="route.meta.public" />
+  <SignInPage v-else-if="user === null" />
   <OnboardingPage v-else-if="user && settings.onboardingDone === false" />
   <main
     v-else-if="user && (settings.onboardingDone !== undefined || error)"

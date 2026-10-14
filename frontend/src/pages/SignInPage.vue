@@ -2,6 +2,7 @@
 // Shown instead of the app while nobody is signed in (App.vue), at whatever
 // address was opened: once signed in, that page shows.
 import { onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { api } from '@/api';
 import { useAuth } from '@/composables/useAuth';
 import { loadGoogleIdentity } from '@/lib/googleIdentity';
@@ -65,7 +66,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="flex min-h-dvh items-center justify-center px-4 py-8">
+  <main class="flex min-h-dvh flex-col items-center justify-center px-4 py-8">
     <div class="flex w-full max-w-sm flex-col items-center gap-6 rounded-xl border bg-card p-8 text-center shadow-sm">
       <img src="/logo.svg" alt="" class="size-14 rounded-xl" />
       <div class="flex flex-col gap-1">
@@ -82,5 +83,16 @@ onMounted(async () => {
       </Button>
       <p v-if="error" class="text-sm text-destructive" role="alert">{{ error }}</p>
     </div>
+    <!-- Under the card: what signing in agrees to -->
+    <p class="mt-4 max-w-sm text-center text-xs text-muted-foreground">
+      En vous connectant, vous acceptez les
+      <RouterLink to="/terms" class="underline underline-offset-2 hover:text-foreground"
+        >conditions d'utilisation</RouterLink
+      >
+      et la
+      <RouterLink to="/privacy" class="underline underline-offset-2 hover:text-foreground"
+        >politique de confidentialité</RouterLink
+      >.
+    </p>
   </main>
 </template>

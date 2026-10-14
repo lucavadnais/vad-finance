@@ -18,6 +18,19 @@ export const router = createRouter({
       props: true,
       meta: { title: 'Compte' },
     },
+    // Public: readable without signing in (Google asks for them, Law 25 too)
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('./pages/legal/PrivacyPage.vue'),
+      meta: { title: 'Politique de confidentialité', public: true },
+    },
+    {
+      path: '/terms',
+      name: 'terms',
+      component: () => import('./pages/legal/TermsPage.vue'),
+      meta: { title: "Conditions d'utilisation", public: true },
+    },
     // Unknown addresses go back home
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

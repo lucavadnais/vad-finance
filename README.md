@@ -54,6 +54,8 @@ Chaque document (compte, transaction, catégorie…) porte le `user` à qui il a
 
 Dans **Paramètres → Profil**, l'utilisateur peut supprimer son compte (`DELETE /api/users/me`) : toutes ses données, ses sessions et l'utilisateur lui-même sont effacés définitivement, après avoir saisi son adresse pour confirmer.
 
+Deux pages publiques, lisibles sans connexion et liées depuis la page de connexion : `/privacy` (politique de confidentialité) et `/terms` (conditions d'utilisation). Google les demande pour publier l'écran de consentement OAuth. Le responsable et son contact sont à compléter dans `frontend/src/lib/legal.ts`.
+
 #### Utilisateur de test (local)
 
 Avec `DEV_LOGIN=1` dans le fichier `.env`, la page de connexion affiche « Se connecter comme utilisateur de test » : connexion sans Google avec l’utilisateur `test@example.com`, créé sans données à sa première connexion. Redémarrez les conteneurs après l'avoir ajouté. À n'activer que sur votre machine : n'importe qui ouvrant l'application (y compris par Tailscale) pourrait l'utiliser.

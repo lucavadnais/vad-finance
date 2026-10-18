@@ -7,7 +7,7 @@ import { ref } from 'vue';
 import { ChevronRight, Upload } from '@lucide/vue';
 import { useCsvImport } from '@/composables/useCsvImport';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import AccountDialog from './AccountDialog.vue';

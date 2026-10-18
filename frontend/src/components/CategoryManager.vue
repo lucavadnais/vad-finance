@@ -21,6 +21,7 @@ import {
   SearchX,
   Tags,
   Trash2,
+  WandSparkles,
 } from '@lucide/vue';
 import { api } from '@/api';
 import { normalizeText } from '@/lib/text';
@@ -40,6 +41,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ActionSheet from './ActionSheet.vue';
 import CategoryDialog from './CategoryDialog.vue';
 import CategoryDot from './CategoryDot.vue';
+import ComingSoon from './ComingSoon.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import EmptyState from './EmptyState.vue';
 import GroupDialog from './GroupDialog.vue';
@@ -471,6 +473,15 @@ const removeGroup = () => {
         </Table>
       </div>
     </div>
+
+    <!-- Coming soon, under the categories (not in the wizard) -->
+    <ComingSoon
+      v-if="!wizard"
+      :icon="WandSparkles"
+      title="Classement automatique"
+      description="Vos transactions rangées d'elles-mêmes dans la bonne catégorie, selon leur description."
+      class="shrink-0"
+    />
 
     <CategoryDialog
       v-model:open="categoryDialog.open"

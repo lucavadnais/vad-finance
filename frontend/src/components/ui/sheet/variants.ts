@@ -1,7 +1,9 @@
 // The panel that slides up from the bottom of a phone, rounded at the top.
 // Shared by the bottom sheet and the dialogs, which take this shape on a phone.
+// Above the on-screen keyboard when it is open (--keyboard-inset, see
+// composables/useKeyboardInset.ts).
 export const bottomSheetClass =
-  'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=closed]:duration-300 data-[state=open]:duration-500 fixed inset-x-0 bottom-0 z-50 flex max-h-[90dvh] flex-col gap-4 rounded-t-3xl shadow-lg transition ease-in-out pb-[calc(1rem+env(safe-area-inset-bottom))]'
+  'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=closed]:duration-300 data-[state=open]:duration-500 fixed inset-x-0 bottom-(--keyboard-inset,0px) z-50 flex max-h-[calc(90dvh-var(--keyboard-inset,0px))] flex-col gap-4 rounded-t-3xl shadow-lg transition ease-in-out pb-[calc(1rem+env(safe-area-inset-bottom))]'
 
 // Its close button: a round grey button in the top right corner
 export const bottomSheetCloseClass =

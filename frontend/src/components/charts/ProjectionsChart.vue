@@ -3,8 +3,8 @@
 // chart, each bar what really came in or went out, topped in a paler shade by
 // what is still planned (spending past its forecast: the forecast and a red
 // bar side by side). The month's income and spending; or, with a card
-// selected above (`focus`), that category alone - and for the buffer, what
-// drew on it, listed on the left.
+// selected above (`focus`), that category alone - its transactions (for the
+// buffer, what drew on it) listed on the left.
 import type { ChartConfig } from '@/components/ui/chart';
 import type { Month } from '@/lib/projections';
 import type { Category, Projection, Transaction } from '@/types';
@@ -131,17 +131,17 @@ const barWidth = computed(() =>
          neither stretches over the card's whole width -->
       <div
         v-else
-        :key="focus ? (focus.listOnly ? 'list' : focus.transactions ? 'buffer' : 'category') : 'month'"
+        :key="focus ? (focus.listOnly ? 'list' : focus.transactions ? 'listed' : 'category') : 'month'"
         class="flex flex-col gap-3 md:flex-row md:items-center md:gap-6"
       >
-        <!-- The selected card's transactions: beside the chart (the buffer), or
-             alone ("Non prévu", nothing planned to chart) -->
+        <!-- The selected card's transactions: beside the chart (a category, the
+             buffer), or alone ("Non prévu", nothing planned to chart) -->
         <div
           v-if="focus?.transactions"
-          class="shrink-0 overflow-y-auto"
+          class="flex shrink-0 flex-col overflow-y-auto"
           :class="focus.listOnly ? 'max-h-80 w-full' : 'md:max-h-56 md:w-80 md:self-stretch'"
         >
-          <TransactionList :transactions="focus.transactions" readonly empty="Rien n'a encore puisé dans la marge." />
+          <TransactionList :transactions="focus.transactions" readonly :empty="focus.transactionsEmpty" />
         </div>
         <!-- The amounts, one small tile per bar: its color's dot, what happened in
            big, the forecast under it. None for a selected card: its own card
@@ -163,7 +163,14 @@ const barWidth = computed(() =>
             >
           </div>
         </div>
-        <div v-if="!focus?.listOnly" ref="box" class="min-h-56 min-w-0 md:flex-1">
+        <!-- Phone: a selected card's chart first, its transactions under it (the
+             month's tiles stay above) -->
+        <div
+          v-if="!focus?.listOnly"
+          ref="box"
+          class="min-h-56 min-w-0 md:flex-1"
+          :class="focus && 'max-md:order-first'"
+        >
           <!-- Drawn once its width is known, so its bars do not grow from nothing -->
           <ChartContainer
             v-if="boxWidth > 0"

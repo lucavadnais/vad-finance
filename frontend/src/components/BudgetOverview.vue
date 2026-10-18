@@ -9,14 +9,23 @@
 // (`manage`). Tapping a card selects it (v-model:selected, its key; again to
 // unselect), and hands its amounts over to the chart below (v-model:focus).
 import type { Category, Projection, Transaction } from '@/types';
+import type { BudgetRow } from '@/lib/budget';
 import type { Month } from '@/lib/projections';
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch, watchEffect } from 'vue';
 import { useElementSize, useScroll } from '@vueuse/core';
-import { CalendarClock, ListChecks, Plus, ShieldCheck, TriangleAlert } from '@lucide/vue';
+import { CalendarClock, ListChecks, Pencil, Plus, ShieldCheck, TriangleAlert } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { budget, budgetSection, estimatedMonth } from '@/lib/budget';
 import { BUFFER_COLOR, NO_COLOR, isDark } from '@/lib/colors';
 import { currentMonth } from '@/lib/projections';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
@@ -30,7 +39,7 @@ const props = defineProps<{
   transactions: Transaction[];
   categories: Category[];
 }>();
-const emit = defineEmits<{ add: []; manage: [] }>();
+const emit = defineEmits<{ add: []; manage: []; edit: [projection: Projection] }>();
 
 export interface BudgetFocus {
   label: string;
@@ -39,10 +48,12 @@ export interface BudgetFocus {
   actualCents: number;
   // Spending past its forecast
   over: boolean;
-  // Its transactions, listed beside the chart: for the buffer, what drew on
-  // it (spending with no forecast, or in a category past its forecast); for
-  // "Non prévu", the spending (or income) with no forecast
+  // Its transactions, listed beside the chart: a category's this month; for
+  // the buffer, what drew on it (spending with no forecast, or in a category
+  // past its forecast); for "Non prévu", the spending (or income) with no
+  // forecast. `transactionsEmpty`: said when there are none
   transactions?: Transaction[];
+  transactionsEmpty?: string;
   // "Non prévu": nothing planned to compare with, the list alone
   listOnly?: boolean;
 }
@@ -89,6 +100,9 @@ function split(cents: number) {
   return i < 0 ? { main: text, rest: '' } : { main: text.slice(0, i), rest: text.slice(i) };
 }
 
+// The forecasts behind a card: its pencil edits them
+const forecastsOf = (rows: BudgetRow[]) => rows.flatMap((r) => r.forecasts.map((f) => f.projection));
+
 type CategoryCard = {
   key: string;
   label: string;
@@ -97,6 +111,7 @@ type CategoryCard = {
   actualCents: number;
   // The monthly buffer: set apart from the categories (accent, hatched, a shield)
   buffer?: boolean;
+  projections: Projection[];
 };
 // The buffer's card: its color crossed by faint stripes, a reserve put aside
 const BUFFER_BACKGROUND = `repeating-linear-gradient(135deg, rgb(255 255 255 / 0.07) 0 6px, transparent 6px 14px), ${BUFFER_COLOR}`;
@@ -116,6 +131,7 @@ const cards = computed<CategoryCard[]>(() => {
   const list: CategoryCard[] = s.compared.map((r) => ({
     key: r.key,
     label: r.label,
+    projections: forecastsOf([r]),
     color: categoryColors.value.get(r.key) ?? NO_COLOR,
     plannedCents: r.plannedCents,
     actualCents: r.actualCents,
@@ -124,6 +140,7 @@ const cards = computed<CategoryCard[]>(() => {
     list.push({
       key: 'none',
       label: 'Sans catégorie',
+      projections: forecastsOf(s.uncategorized),
       color: NO_COLOR,
       plannedCents: s.uncategorized.reduce((sum, r) => sum + r.plannedCents, 0),
       actualCents: 0,
@@ -134,6 +151,7 @@ const cards = computed<CategoryCard[]>(() => {
       label: 'Marge imprévus',
       color: BUFFER_COLOR,
       buffer: true,
+      projections: [],
       plannedCents: s.summary.bufferCents,
       actualCents: s.summary.bufferUsedCents,
     });
@@ -198,7 +216,13 @@ watchEffect(() => {
         plannedCents: c.plannedCents,
         actualCents: c.actualCents,
         over: kind.value === 'expense' && c.actualCents > c.plannedCents,
-        transactions: c.buffer ? bufferTransactions.value : undefined,
+        // Not "Sans catégorie": its forecasts have no transactions of their own
+        transactions: c.buffer
+          ? bufferTransactions.value
+          : c.key === 'none'
+            ? undefined
+            : monthTransactions(new Set([c.key])),
+        transactionsEmpty: c.buffer ? "Rien n'a encore puisé dans la marge" : 'Aucune transaction ce mois-ci',
       }
     : null;
 });
@@ -467,47 +491,87 @@ function springBack(velocity: number) {
         <template v-for="c in cards" :key="c.key">
           <!-- The buffer apart from the categories -->
           <Separator v-if="c.buffer" orientation="vertical" class="self-center data-[orientation=vertical]:h-32" />
-          <button
-            type="button"
-            class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl p-4 text-left shadow-sm transition active:scale-[0.98]"
+          <!-- The card selects itself; its pencil (bottom right) edits it -->
+          <div
+            class="relative h-44 w-40 shrink-0 snap-start rounded-3xl shadow-sm transition has-[>button:active]:scale-[0.98]"
             :style="{ background: c.buffer ? BUFFER_BACKGROUND : c.color }"
             :class="[
               isDark(c.color) ? 'text-white' : 'text-neutral-900',
               selected === c.key && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
               selected && selected !== c.key && 'opacity-50',
             ]"
-            :aria-pressed="selected === c.key"
-            @click="select(c.key)"
           >
-            <!-- The name (on two lines if need be: the card is narrow), its share
-               of the total beside it - under the buffer's shield -->
-            <span class="flex items-start gap-2">
-              <span class="line-clamp-2 text-base leading-tight font-medium break-words" :title="c.label">
-                {{ c.label }}
-              </span>
-              <span class="mt-0.5 ml-auto flex shrink-0 flex-col items-end gap-1">
-                <ShieldCheck v-if="c.buffer" class="size-4" />
-                <span class="text-xs tabular-nums opacity-75">{{ share(c) }} %</span>
-              </span>
-            </span>
-            <!-- What already went out (or came in), the forecast under it -->
-            <span class="truncate text-xl font-semibold tabular-nums">
-              {{ split(c.actualCents).main }}<span class="text-sm font-medium">{{ split(c.actualCents).rest }}</span>
-            </span>
-            <span class="truncate text-xs tabular-nums opacity-75">sur {{ formatCents(c.plannedCents) }} prévus</span>
-            <!-- What really happened against the forecast -->
-            <span
-              class="mt-auto h-1 w-full shrink-0 overflow-hidden rounded-full"
-              :class="isDark(c.color) ? 'bg-white/25' : 'bg-black/10'"
-              :title="`${formatCents(c.actualCents)} réalisés`"
+            <button
+              type="button"
+              class="flex size-full flex-col rounded-[inherit] p-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              :aria-pressed="selected === c.key"
+              @click="select(c.key)"
             >
+              <!-- The name (on two lines if need be: the card is narrow), its share
+               of the total beside it - under the buffer's shield -->
+              <span class="flex items-start gap-2">
+                <span class="line-clamp-2 text-base leading-tight font-medium break-words" :title="c.label">
+                  {{ c.label }}
+                </span>
+                <span class="mt-0.5 ml-auto flex shrink-0 flex-col items-end gap-1">
+                  <ShieldCheck v-if="c.buffer" class="size-4" />
+                  <span class="text-xs tabular-nums opacity-75">{{ share(c) }} %</span>
+                </span>
+              </span>
+              <!-- What already went out (or came in), the forecast under it -->
+              <span class="truncate text-xl font-semibold tabular-nums">
+                {{ split(c.actualCents).main }}<span class="text-sm font-medium">{{ split(c.actualCents).rest }}</span>
+              </span>
+              <span class="truncate text-xs tabular-nums opacity-75">sur {{ formatCents(c.plannedCents) }} prévus</span>
+              <!-- What really happened against the forecast -->
               <span
-                class="block h-full rounded-full"
-                :class="isDark(c.color) ? 'bg-white' : 'bg-neutral-900'"
-                :style="{ width: `${progress(c)}%` }"
-              />
-            </span>
-          </button>
+                class="mt-auto h-1 shrink-0 overflow-hidden rounded-full"
+                :class="[
+                  isDark(c.color) ? 'bg-white/25' : 'bg-black/10',
+                  selected === c.key ? 'w-[calc(100%-2.25rem)]' : 'w-full',
+                ]"
+                :title="`${formatCents(c.actualCents)} réalisés`"
+              >
+                <span
+                  class="block h-full rounded-full"
+                  :class="isDark(c.color) ? 'bg-white' : 'bg-neutral-900'"
+                  :style="{ width: `${progress(c)}%` }"
+                />
+              </span>
+            </button>
+            <!-- Once selected, editing it quickly: its one forecast, a pick among
+               several, or the buffer in the settings -->
+            <Button
+              v-if="selected === c.key && (c.buffer || c.projections.length === 1)"
+              size="icon-sm"
+              variant="ghost"
+              class="absolute right-2.5 bottom-2 text-inherit hover:bg-current/15 hover:text-inherit"
+              :aria-label="`Modifier ${c.buffer ? 'la marge' : c.projections[0]!.name}`"
+              :title="`Modifier ${c.buffer ? 'la marge' : c.projections[0]!.name}`"
+              @click="c.buffer ? openSettings('budget') : emit('edit', c.projections[0]!)"
+            >
+              <Pencil />
+            </Button>
+            <DropdownMenu v-else-if="selected === c.key && c.projections.length > 1">
+              <DropdownMenuTrigger as-child>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  class="absolute right-2.5 bottom-2 text-inherit hover:bg-current/15 hover:text-inherit aria-expanded:bg-current/15"
+                  :aria-label="`Modifier une prévision de ${c.label}`"
+                  :title="`Modifier une prévision de ${c.label}`"
+                >
+                  <Pencil />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Modifier</DropdownMenuLabel>
+                <DropdownMenuItem v-for="p in c.projections" :key="p._id" @select="emit('edit', p)">
+                  {{ p.name }}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </template>
         <!-- With no forecast: what went out (or came in) anyway, selected like a
            card: its transactions then show below, in place of the chart. Not

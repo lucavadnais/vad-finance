@@ -10,11 +10,11 @@ import { addMonths, currentMonth, monthLabel } from '@/lib/projections';
 import { defineAsyncComponent, ref } from 'vue';
 import { CalendarDays, LayoutGrid, Target } from '@lucide/vue';
 import { api } from '@/api';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { BudgetFocus } from './BudgetOverview.vue';
 import BudgetOverview from './BudgetOverview.vue';
+import ComingSoon from './ComingSoon.vue';
 import ProjectionCalendar from './ProjectionCalendar.vue';
 import ProjectionDialog from './ProjectionDialog.vue';
 import ProjectionListDialog from './ProjectionListDialog.vue';
@@ -105,6 +105,7 @@ async function remove(p: Projection) {
           :categories="categories"
           @add="openDialog(null)"
           @manage="listOpen = true"
+          @edit="openDialog"
         />
         <!-- Forecasts vs actual by category, for the month shown; or the list
              of "Non prévu" when it is selected, forecasts or not -->
@@ -118,19 +119,11 @@ async function remove(p: Projection) {
         />
 
         <!-- Coming soon: savings goals, announced where the month is planned -->
-        <div
-          class="flex items-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/30 p-4 text-sm"
-          aria-disabled="true"
-        >
-          <Target class="size-5 shrink-0 text-muted-foreground" />
-          <span class="flex min-w-0 flex-col">
-            <span class="font-medium">Objectifs d'épargne</span>
-            <span class="text-muted-foreground"
-              >Mettre de l'argent de côté pour un projet et suivre où vous en êtes.</span
-            >
-          </span>
-          <Badge variant="secondary" class="ml-auto shrink-0">Bientôt</Badge>
-        </div>
+        <ComingSoon
+          :icon="Target"
+          title="Objectifs d'épargne"
+          description="Mettre de l'argent de côté pour un projet et suivre où vous en êtes."
+        />
       </template>
 
       <!-- The month's forecasts day by day, each opening its edition -->

@@ -30,8 +30,9 @@ function edit(t: Transaction) {
 </script>
 
 <template>
-  <!-- Narrow (a phone, a side column): the category goes under the description -->
-  <div class="@container">
+  <!-- Narrow (a phone, a side column): the category goes under the description.
+       Fills a flex column it is put in, so the empty state centers in it -->
+  <div class="@container flex flex-1 flex-col">
     <EmptyState v-if="transactions.length === 0" :icon="Receipt" :title="empty" />
     <Table v-else>
       <TableBody>

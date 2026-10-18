@@ -97,8 +97,13 @@ watch([open, section], () => (error.value = ''));
       </nav>
 
       <!-- Each section scrolls its own list, under its fixed title and actions.
-           Phone: only once one is picked, with the way back to the list -->
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-6" :class="!inSection && 'max-md:hidden'">
+           Phone: only once one is picked, with the way back to the list; the
+           whole section scrolls there, a block so its lists take their full
+           height -->
+      <div
+        class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 p-6 max-md:px-4"
+        :class="inSection ? 'max-md:block max-md:space-y-4 max-md:overflow-y-auto' : 'max-md:hidden'"
+      >
         <Button variant="ghost" size="sm" class="-ml-2 self-start md:hidden" @click="inSection = false">
           <ChevronLeft />
           Paramètres

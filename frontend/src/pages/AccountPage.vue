@@ -5,7 +5,7 @@
 import type { ChartSelection, Period } from '@/lib/chartData';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Pencil } from '@lucide/vue';
+import { ChartPie, Pencil } from '@lucide/vue';
 import { formatCents, formatCentsCompact } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
 import {
@@ -23,6 +23,7 @@ import { ACCOUNT_TYPES } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import TrendChart from '@/components/TrendChart.vue';
 import ExpensesDonut from '@/components/charts/ExpensesDonut.vue';
 import SelectedTransactions from '@/components/charts/SelectedTransactions.vue';
@@ -165,9 +166,7 @@ const periodTransactions = computed(() =>
 
     <section class="flex flex-col gap-2 border-t pt-6">
       <h3 class="text-lg font-semibold">Dépenses par catégorie</h3>
-      <p v-if="expenseRows.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-        Aucune dépense sur cette période.
-      </p>
+      <EmptyState v-if="expenseRows.length === 0" :icon="ChartPie" title="Aucune dépense sur cette période" />
       <template v-else>
         <ExpensesDonut :rows="expenseRows" :series="expenses.series" @select="selection = $event" />
         <SelectedTransactions :selection="selection" :transactions="selectedTransactions" @close="selection = null" />

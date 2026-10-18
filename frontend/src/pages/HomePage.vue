@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ChartLine, Eye, EyeOff, Pencil, Plus, Table2, X } from '@lucide/vue';
+import { ChartLine, Eye, EyeOff, Landmark, Pencil, Plus, Table2, X } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
 import CsvImport from '@/components/CsvImport.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import MobileTabBar, { type HomeTab } from '@/components/MobileTabBar.vue';
 import DuplicateDialog from '@/components/DuplicateDialog.vue';
 import MobileAddSheet from '@/components/MobileAddSheet.vue';
@@ -252,7 +253,21 @@ const tabAlerts = computed(() => ({
               />
             </TabsContent>
           </Tabs>
-          <p v-if="accounts.length === 0" class="text-sm text-muted-foreground">Aucun compte pour l'instant.</p>
+          <!-- None yet: the empty list offers the first one, in place of the
+               dashed button -->
+          <EmptyState
+            v-if="accounts.length === 0"
+            :icon="Landmark"
+            title="Aucun compte pour l'instant"
+            description="Ajoutez un compte pour suivre son solde."
+          >
+            <AccountForm @created="refresh" @error="setError">
+              <Button>
+                <Plus />
+                Ajouter un compte
+              </Button>
+            </AccountForm>
+          </EmptyState>
           <!-- Each account picks itself (or back to all, when it is the one picked);
                the others dim while one is -->
           <ul v-else class="-mx-2 flex flex-col gap-1">
@@ -288,7 +303,7 @@ const tabAlerts = computed(() => ({
             </li>
           </ul>
           <!-- Adding one: under the accounts, dashed, as on the phone's home -->
-          <AccountForm @created="refresh" @error="setError">
+          <AccountForm v-if="accounts.length > 0" @created="refresh" @error="setError">
             <button
               type="button"
               class="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/40 p-3 text-sm font-medium text-foreground/80 transition-colors hover:bg-muted/50"

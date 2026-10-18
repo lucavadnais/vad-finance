@@ -1,16 +1,29 @@
 <script setup lang="ts">
 // "Catégories et groupes" section of the settings: one kind at a time (Dépenses /
-// Revenus), a split button to add a group or a category, then the categories,
-// by group. Each group's row shows its color, a "+" adding a category straight
-// into it, and a menu to edit or delete it. On a phone, a "…" instead of the
-// actions, opening them in a sheet (ActionSheet).
+// Revenus), a tile adding a group, then a tile per group, its color as a dot,
+// "Sans groupe" last. A tile's "…" edits or deletes the group (in a sheet on a
+// phone, ActionSheet); tapping the tile opens the group: its categories, and
+// the button adding one into it. "Regrouper" off: every category in one list,
+// its group beside it.
 // Also the setup wizard's categories step (`wizard`): the same, without the
 // header (the wizard has its own) or archiving.
 import type { Category, CategoryGroup, CategoryKind } from '@/types';
 import type { SheetAction } from './ActionSheet.vue';
-import { computed, ref } from 'vue';
-import { Archive, ArchiveRestore, ChevronDown, Ellipsis, FolderPlus, Pencil, Plus, Trash2 } from '@lucide/vue';
+import { computed, ref, useId, watch } from 'vue';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  Ellipsis,
+  FolderPlus,
+  Pencil,
+  Plus,
+  SearchX,
+  Tags,
+  Trash2,
+} from '@lucide/vue';
 import { api } from '@/api';
+import { normalizeText } from '@/lib/text';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,13 +33,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ActionSheet from './ActionSheet.vue';
 import CategoryDialog from './CategoryDialog.vue';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
+import EmptyState from './EmptyState.vue';
 import GroupDialog from './GroupDialog.vue';
+import SearchInput from './SearchInput.vue';
 
 const props = defineProps<{ categories: Category[]; groups: CategoryGroup[]; wizard?: boolean }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
@@ -41,14 +58,15 @@ const groupOptions = computed<Record<string, string>>(() => ({
 }));
 
 // The kind shown, picked above the table
-const kind = ref<CategoryKind>('expense');
+const kind = defineModel<CategoryKind>('kind', { default: 'expense' });
 const shownCategories = computed(() => props.categories.filter((c) => c.kind === kind.value));
 const countOf = (k: CategoryKind) => props.categories.filter((c) => c.kind === k).length;
-// Name, actions: no "Type" (the tabs give it) nor "Groupe" (the sections
-// give it; it changes in the category's dialog)
-const columns = 2;
 
 const sorted = computed(() => [...shownCategories.value].sort((a, b) => a.name.localeCompare(b.name, 'fr')));
+
+// By group (tiles), or every category in one list (the wizard starts there)
+const grouped = ref(!props.wizard);
+const groupedId = useId();
 
 // A section per group (then "Sans groupe"). Archived categories stay in place,
 // after the active ones of their section.
@@ -75,6 +93,58 @@ const sections = computed<Section[]>(() => {
     { key: NO_GROUP, title: 'Sans groupe', group: null, items: activeFirst(sorted.value.filter((c) => !c.group)) },
   ].filter((section) => section.items.length > 0 || section.key !== NO_GROUP);
 });
+
+// Searched by the group's name or a category's (accents and case ignored): a
+// group found by its name keeps all its categories, else only those found
+const search = ref('');
+const query = computed(() => normalizeText(search.value));
+const found = computed<Section[]>(() => {
+  const q = query.value;
+  if (!q) return sections.value;
+  return sections.value.flatMap((section) => {
+    if (normalizeText(section.title).includes(q)) return [section];
+    const items = section.items.filter((c) => normalizeText(c.name).includes(q));
+    return items.length > 0 ? [{ ...section, items }] : [];
+  });
+});
+// A group's count: all its categories, even while searching
+const countIn = (section: Section) => sections.value.find((s) => s.key === section.key)?.items.length ?? 0;
+
+// Not grouped: every category, found by its name or its group's
+const groupName = (c: Category) => (c.group ? groupOptions.value[c.group] : undefined);
+const flat = computed(() =>
+  activeFirst(
+    sorted.value.filter(
+      (c) => normalizeText(c.name).includes(query.value) || normalizeText(groupName(c) ?? '').includes(query.value),
+    ),
+  ),
+);
+
+// The group opened from its tile (its section's key); back to the tiles once
+// it is gone (deleted, the other kind shown, or no longer found)
+const openKey = ref<string | null>(null);
+const opened = computed(() => found.value.find((s) => s.key === openKey.value) ?? null);
+watch([kind, grouped], () => (openKey.value = null));
+
+watch(opened, (section) => {
+  if (!section) openKey.value = null;
+});
+const listed = computed(() => opened.value?.items ?? flat.value);
+// Said in their place when there are none; not searching, it then offers
+// the first one itself, in place of the "Catégorie" button
+const addInEmpty = computed(() => listed.value.length === 0 && !query.value);
+// The "Catégorie" button: not while searching either
+const showAdd = computed(() => !query.value && !addInEmpty.value);
+const emptyListed = computed(() =>
+  query.value
+    ? { icon: SearchX, title: 'Aucune catégorie trouvée', description: 'Essayez avec un autre nom.' }
+    : {
+        icon: Tags,
+        title: opened.value ? 'Aucune catégorie dans ce groupe' : 'Aucune catégorie',
+        actionLabel: 'Ajouter une catégorie',
+      },
+);
+const addCategory = () => openCategory(null, opened.value?.group?._id ?? null);
 
 // Category dialog: a new category (in `defaultGroup`), or `category` edited
 const categoryDialog = ref({ open: false, category: null as Category | null, defaultGroup: null as string | null });
@@ -130,10 +200,9 @@ function sectionActions(section: Section) {
   sheet.value = {
     open: true,
     title: section.title,
-    description: `${section.items.length} catégorie${section.items.length > 1 ? 's' : ''}`,
+    description: `${countIn(section)} catégorie${countIn(section) > 1 ? 's' : ''}`,
     color: group?.color,
     actions: [
-      { label: 'Ajouter une catégorie', icon: Plus, run: () => openCategory(null, group?._id ?? null) },
       ...(group
         ? [
             { label: 'Modifier le groupe', icon: Pencil, run: () => openGroup(group) },
@@ -186,109 +255,167 @@ const removeGroup = () => {
           <TabsTrigger value="income">Revenus · {{ countOf('income') }}</TabsTrigger>
         </TabsList>
       </Tabs>
-      <!-- Split button: adds a group, its arrow offers a category -->
-      <div class="ml-auto flex">
-        <Button class="rounded-r-none" @click="openGroup(null)">
-          <FolderPlus />
-          Groupe
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button
-              size="icon"
-              class="rounded-l-none border-l border-primary-foreground/25"
-              aria-label="Autres ajouts"
-              title="Autres ajouts"
-            >
-              <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem @select="openGroup(null)">
-              <FolderPlus />
-              Nouveau groupe
-            </DropdownMenuItem>
-            <DropdownMenuItem @select="openCategory(null)">
-              <Plus />
-              Nouvelle catégorie
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div class="ml-auto flex items-center gap-2">
+        <Switch :id="groupedId" v-model="grouped" />
+        <Label :for="groupedId" class="font-normal">Regrouper</Label>
       </div>
     </div>
 
-    <!-- Only the list scrolls, under a sticky header -->
-    <div
-      class="flex min-h-0 flex-1 flex-col *:data-[slot=table-container]:min-h-0 *:data-[slot=table-container]:flex-1"
-    >
-      <Table>
-        <TableHeader class="sticky top-0 z-10 bg-background">
-          <TableRow>
-            <TableHead>Nom</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <template v-for="section in sections" :key="section.key">
-            <!-- The group's row: its color, a "+" adding a category into it, its menu (edit, delete) -->
-            <TableRow class="bg-muted/50 hover:bg-muted/50">
-              <TableCell :colspan="columns" class="py-1.5">
-                <div class="flex items-center gap-1">
-                  <CategoryDot v-if="section.group" :color="section.group.color" class="mx-2.5 size-3" />
-                  <span class="font-medium" :class="!section.group && 'pl-2'">{{ section.title }}</span>
-                  <span class="text-muted-foreground">· {{ section.items.length }}</span>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    class="ml-auto sm:hidden"
-                    :aria-label="`Actions de ${section.title}`"
-                    @click="sectionActions(section)"
-                  >
-                    <Ellipsis />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    class="ml-auto text-muted-foreground max-sm:hidden"
-                    :aria-label="`Ajouter une catégorie à ${section.title}`"
-                    @click="openCategory(null, section.group?._id ?? null)"
-                  >
-                    <Plus />
-                    Catégorie
-                  </Button>
-                  <DropdownMenu v-if="section.group">
-                    <DropdownMenuTrigger as-child>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        class="max-sm:hidden"
-                        :aria-label="`Actions du groupe ${section.title}`"
-                      >
-                        <Ellipsis />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem @select="openGroup(section.group)">
-                        <Pencil />
-                        Modifier le groupe
-                      </DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" @select="askDeleteGroup(section.group)">
-                        <Trash2 />
-                        Supprimer le groupe
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </TableCell>
-            </TableRow>
-            <TableRow v-if="section.items.length === 0">
-              <TableCell :colspan="columns" class="text-muted-foreground">Aucune catégorie dans ce groupe</TableCell>
-            </TableRow>
-            <TableRow v-for="c in section.items" :key="c._id" :class="c.archived && 'text-muted-foreground'">
+    <!-- The search: by a group's name or a category's -->
+    <SearchInput v-model="search" placeholder="Groupe ou catégorie…" label="Rechercher un groupe ou une catégorie" />
+
+    <!-- The groups, a tile each; only they scroll -->
+    <div v-if="grouped && !opened" class="-m-1 flex min-h-0 flex-1 flex-col overflow-y-auto p-1">
+      <!-- No group yet: the empty list offers the first one, in place of the
+           "Nouveau groupe" tile -->
+      <EmptyState
+        v-if="!query && found.length === 0"
+        :icon="FolderPlus"
+        title="Aucun groupe"
+        description="Les groupes rassemblent vos catégories, pour mieux les analyser."
+        action-label="Ajouter un groupe"
+        @action="openGroup(null)"
+      />
+      <div v-else-if="found.length > 0" class="grid gap-3 sm:grid-cols-3">
+        <!-- Adding a group, a tile of its own; not while searching -->
+        <button
+          v-if="!query"
+          type="button"
+          class="flex h-32 min-w-0 flex-col items-center justify-center gap-2 rounded-3xl max-sm:h-14 max-sm:flex-row border-2 border-dashed border-primary/40 bg-primary/5 p-4 font-medium text-primary transition outline-none hover:bg-primary/10 focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.98]"
+          @click="openGroup(null)"
+        >
+          <FolderPlus class="size-6" />
+          Nouveau groupe
+        </button>
+        <!-- The tile opens the group; its "…" (top right) edits or deletes it -->
+        <div
+          v-for="section in found"
+          :key="section.key"
+          class="relative h-32 min-w-0 rounded-3xl bg-card shadow-sm transition hover:bg-muted/50 active:scale-[0.98] max-sm:h-24"
+          :class="section.group ? 'border' : 'border-2 border-dashed border-muted-foreground/40'"
+        >
+          <button
+            type="button"
+            class="flex size-full flex-col rounded-[inherit] p-4 text-left max-sm:p-3.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            :aria-label="`Ouvrir ${section.title}`"
+            @click="openKey = section.key"
+          >
+            <!-- Its color, the name (on two lines if need be), its count under it -->
+            <span class="flex items-start gap-2" :class="section.group && 'pr-7'">
+              <CategoryDot :color="section.group?.color" class="mt-1 size-3" />
+              <span
+                class="line-clamp-2 text-base leading-tight font-medium break-words max-sm:line-clamp-1"
+                :title="section.title"
+              >
+                {{ section.title }}
+              </span>
+            </span>
+            <span class="pl-5 text-xs text-muted-foreground tabular-nums">
+              {{ countIn(section) }} catégorie{{ countIn(section) > 1 ? 's' : '' }}
+            </span>
+            <!-- Its categories (those found, while searching), each with its
+                 color, as many as fit on a line -->
+            <span class="mt-auto flex h-4 flex-wrap gap-x-3 overflow-hidden text-xs text-muted-foreground">
+              <span v-for="c in section.items" :key="c._id" class="inline-flex items-center gap-1.5">
+                <CategoryDot :color="categoryColors.get(c._id)" class="size-2" />
+                {{ c.name }}
+              </span>
+              <template v-if="section.items.length === 0">Aucune catégorie</template>
+            </span>
+          </button>
+          <template v-if="section.group">
+            <!-- Phone: the actions in a sheet -->
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              class="absolute top-2.5 right-2.5 max-sm:top-2 max-sm:right-2 sm:hidden"
+              :aria-label="`Actions du groupe ${section.title}`"
+              @click="sectionActions(section)"
+            >
+              <Ellipsis />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  class="absolute top-2.5 right-2.5 max-sm:top-2 max-sm:right-2 max-sm:hidden"
+                  :aria-label="`Actions du groupe ${section.title}`"
+                >
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem @select="openGroup(section.group)">
+                  <Pencil />
+                  Modifier le groupe
+                </DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" @select="askDeleteGroup(section.group)">
+                  <Trash2 />
+                  Supprimer le groupe
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </template>
+        </div>
+      </div>
+      <!-- Nothing found -->
+      <EmptyState
+        v-if="query && found.length === 0"
+        :icon="SearchX"
+        title="Aucun groupe ni catégorie trouvé"
+        description="Essayez avec un autre nom."
+      />
+    </div>
+
+    <!-- A group opened: its categories, under its name and actions. Not
+         grouped: every category, under the button adding one -->
+    <div v-else class="flex min-h-0 flex-1 flex-col gap-2">
+      <div v-if="opened || showAdd" class="flex items-center gap-1">
+        <template v-if="opened">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Retour aux groupes"
+            title="Retour aux groupes"
+            @click="openKey = null"
+          >
+            <ChevronLeft />
+          </Button>
+          <CategoryDot v-if="opened.group" :color="opened.group.color" class="mx-1.5 size-3" />
+          <h3 class="min-w-0 truncate font-semibold">{{ opened.title }}</h3>
+          <span class="shrink-0 text-muted-foreground">· {{ countIn(opened) }}</span>
+        </template>
+        <!-- Adding a category (into the group); the group's own actions are on its tile -->
+        <Button
+          v-if="showAdd"
+          size="sm"
+          class="ml-auto shrink-0"
+          :aria-label="opened ? `Ajouter une catégorie à ${opened.title}` : 'Ajouter une catégorie'"
+          @click="addCategory"
+        >
+          <Plus />
+          Catégorie
+        </Button>
+      </div>
+
+      <EmptyState v-if="listed.length === 0" v-bind="emptyListed" @action="addCategory" />
+      <!-- Only the list scrolls -->
+      <div
+        v-else
+        class="flex min-h-0 flex-1 flex-col *:data-[slot=table-container]:min-h-0 *:data-[slot=table-container]:flex-1"
+      >
+        <Table>
+          <TableBody>
+            <TableRow v-for="c in listed" :key="c._id" :class="c.archived && 'text-muted-foreground'">
               <TableCell class="font-medium">
                 <span class="flex items-center gap-2">
                   <CategoryDot :color="categoryColors.get(c._id)" />
                   {{ c.name }}
+                  <!-- Not grouped: its group beside it -->
+                  <span v-if="!opened && groupName(c)" class="text-xs font-normal text-muted-foreground">
+                    · {{ groupName(c) }}
+                  </span>
                   <Badge v-if="c.archived" variant="outline" class="font-normal text-muted-foreground">Archivée</Badge>
                 </span>
               </TableCell>
@@ -340,10 +467,9 @@ const removeGroup = () => {
                 </span>
               </TableCell>
             </TableRow>
-          </template>
-          <TableEmpty v-if="sections.length === 0" :colspan="columns"> Aucune catégorie </TableEmpty>
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
     </div>
 
     <CategoryDialog

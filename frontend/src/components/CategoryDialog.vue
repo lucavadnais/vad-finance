@@ -35,7 +35,8 @@ const props = defineProps<{
   // New category: its kind to start with
   defaultKind?: CategoryKind;
 }>();
-const emit = defineEmits<{ saved: [] }>();
+// `created`: the new category, e.g. for a select to pick it
+const emit = defineEmits<{ saved: []; created: [category: Category] }>();
 
 const editing = computed(() => !!props.category);
 
@@ -114,10 +115,11 @@ async function save() {
       // Its own color only shows without a group; null draws a new one
       ...(inGroup ? { shade: shade.value } : { color: color.value }),
     };
+    const created = props.category ? null : await api.createCategory(fields);
     if (props.category) await api.updateCategory(props.category._id, fields);
-    else await api.createCategory(fields);
     open.value = false;
     emit('saved');
+    if (created) emit('created', created);
   } catch (err) {
     error.value = (err as Error).message;
   } finally {

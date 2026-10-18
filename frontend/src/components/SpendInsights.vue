@@ -344,7 +344,7 @@ const dayLabels = computed(() =>
         :selected-transactions="selectedTransactions"
         :share-only="scope === 'month' || scope === 'week'"
         :empty-message="
-          scope === 'month' && isFuture ? 'Le mois n\'a pas encore commencé.' : 'Aucune dépense sur cette période.'
+          scope === 'month' && isFuture ? 'Le mois n\'a pas encore commencé' : 'Aucune dépense sur cette période'
         "
         class="border-t pt-6 md:-mx-6"
         @select="selection = $event"

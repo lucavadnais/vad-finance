@@ -60,7 +60,7 @@ Le backend vérifie le jeton remis par Google (signature, destinataire, expirati
 
 Chaque document (compte, transaction, catégorie…) porte le `user` à qui il appartient, et chaque requête filtre dessus. Les modèles refusent toute requête qui ne nomme pas d'utilisateur (`backend/src/lib/owned.js`). Un identifiant envoyé par le client (compte d'une transaction, groupe d'une catégorie…) doit aussi appartenir à l'utilisateur.
 
-À sa première connexion, un nouvel utilisateur passe par un assistant de configuration (comptes, catégories suggérées, budget, premier import), qui revient tant qu'il n'est ni terminé ni passé (`onboardingDone` dans ses paramètres). Il peut être relancé depuis **Paramètres → Profil**.
+À sa première connexion, un nouvel utilisateur passe par un assistant de configuration (comptes, catégories, budget, premier import), qui revient tant qu'il n'est ni terminé ni passé (`onboardingDone` dans ses paramètres). Il peut être relancé depuis **Paramètres → Profil**.
 
 Dans **Paramètres → Profil**, l'utilisateur peut supprimer son compte (`DELETE /api/users/me`) : toutes ses données, ses sessions et l'utilisateur lui-même sont effacés définitivement, après avoir saisi son adresse pour confirmer.
 

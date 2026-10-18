@@ -33,10 +33,13 @@ const emit = defineEmits<{ add: []; edit: [projection: Projection]; remove: [pro
           :categories="categories"
           @edit="emit('edit', $event)"
           @remove="emit('remove', $event)"
+          @add="emit('add')"
         >
           <template #actions>
-            <!-- Not on a phone: the search keeps the whole row -->
+            <!-- Not on a phone: the search keeps the whole row. None yet: the
+                 empty list offers the first one itself -->
             <Button
+              v-if="projections.length > 0"
               class="shrink-0 max-sm:hidden"
               aria-label="Ajouter une prévision"
               title="Ajouter une prévision"

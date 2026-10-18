@@ -67,14 +67,19 @@ defineExpose({ submit });
     <div class="flex flex-col gap-3 rounded-xl border bg-card p-4">
       <div class="flex flex-col gap-1">
         <h3 class="font-medium">Revenus et dépenses prévus</h3>
-        <p class="text-sm text-muted-foreground">
-          Votre paie, le loyer, les abonnements… Chaque mois, l'application les compare à vos vraies transactions.
-        </p>
       </div>
-      <ProjectionList :projections="projections" :categories="categories" @edit="openDialog" @remove="remove">
+      <ProjectionList
+        :projections="projections"
+        :categories="categories"
+        @add="openDialog(null)"
+        @edit="openDialog"
+        @remove="remove"
+      >
         <template #actions>
-          <!-- Icon only on a phone, so the search keeps its room -->
+          <!-- Icon only on a phone, so the search keeps its room. None yet:
+               the empty list offers the first one itself -->
           <Button
+            v-if="projections.length > 0"
             class="shrink-0 max-sm:size-9"
             aria-label="Ajouter une prévision"
             title="Ajouter une prévision"

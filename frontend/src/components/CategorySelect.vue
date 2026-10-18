@@ -4,11 +4,12 @@ export const TRANSFER = 'transfer';
 </script>
 
 <script setup lang="ts">
-// Category id (or null for "no category"), grouped by kind
+// Category id (or null for "no category"), grouped by kind. "Nouvelle
+// catégorie…" creates one in a dialog (CategoryDialog), then picks it.
 import type { HTMLAttributes } from 'vue';
 import type { Category, CategoryKind } from '@/types';
-import { computed } from 'vue';
-import { Settings2 } from '@lucide/vue';
+import { computed, ref } from 'vue';
+import { Plus, Settings2 } from '@lucide/vue';
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import {
 import { CATEGORY_KINDS } from '@/lib/labels';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useSettings } from '@/composables/useSettings';
+import CategoryDialog from './CategoryDialog.vue';
 import CategoryDot from './CategoryDot.vue';
 
 const model = defineModel<string | null>({ default: null });
@@ -29,23 +31,33 @@ const props = defineProps<{
   categories: Category[];
   // Adds a "Transfert" choice, for transactions between own accounts
   allowTransfer?: boolean;
+  // A new category: its kind to start with (e.g. from the amount's sign)
+  newKind?: CategoryKind;
   id?: string;
   class?: HTMLAttributes['class'];
 }>();
 
-const { categoryColors, settings } = useFinanceData();
+const { categoryColors, categoryGroups, settings, refresh } = useFinanceData();
 
 // Select items cannot have an empty value, so "no category" uses a sentinel
 const NONE = 'none';
 // Last item: opens the settings on the categories, without changing the value.
 // Not in the setup wizard: the settings are out of its reach
 const MANAGE = 'manage';
+// Before it: creates one, the value kept until it is created
+const NEW = 'new';
+const creating = ref(false);
+async function onCreated(category: Category) {
+  await refresh();
+  model.value = category._id;
+}
 const { openSettings } = useSettings();
 const canManage = computed(() => settings.value.onboardingDone !== false);
 const value = computed({
   get: () => model.value ?? NONE,
   set: (v: string) => {
     if (v === MANAGE) openSettings('categories');
+    else if (v === NEW) creating.value = true;
     else model.value = v === NONE ? null : v;
   },
 });
@@ -83,8 +95,12 @@ const groups = computed(() =>
         <SelectSeparator />
         <SelectItem :value="TRANSFER">Transfert</SelectItem>
       </template>
+      <SelectSeparator />
+      <SelectItem :value="NEW">
+        <Plus />
+        Nouvelle catégorie…
+      </SelectItem>
       <template v-if="canManage">
-        <SelectSeparator />
         <SelectItem :value="MANAGE" class="text-muted-foreground">
           <Settings2 />
           Gérer les catégories…
@@ -92,4 +108,5 @@ const groups = computed(() =>
       </template>
     </SelectContent>
   </Select>
+  <CategoryDialog v-model:open="creating" :groups="categoryGroups" :default-kind="newKind" @created="onCreated" />
 </template>

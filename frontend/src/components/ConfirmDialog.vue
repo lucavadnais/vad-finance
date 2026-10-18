@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Wraps a trigger (default slot) with a shadcn AlertDialog asking to confirm.
 // Without a trigger, open it through v-model:open (e.g. from a menu item).
+// Deleting by default; `destructive: false` for a plain question.
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,11 +15,18 @@ import {
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
 
-withDefaults(defineProps<{ title: string; description?: string; confirmLabel?: string }>(), {
-  confirmLabel: 'Supprimer',
-});
+withDefaults(
+  defineProps<{
+    title: string;
+    description?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    destructive?: boolean;
+  }>(),
+  { confirmLabel: 'Supprimer', cancelLabel: 'Annuler', destructive: true },
+);
 const open = defineModel<boolean>('open', { default: false });
-const emit = defineEmits<{ confirm: [] }>();
+const emit = defineEmits<{ confirm: []; cancel: [] }>();
 </script>
 
 <template>
@@ -32,8 +40,11 @@ const emit = defineEmits<{ confirm: [] }>();
         <AlertDialogDescription v-if="description">{{ description }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel>Annuler</AlertDialogCancel>
-        <AlertDialogAction :class="buttonVariants({ variant: 'destructive' })" @click="emit('confirm')">
+        <AlertDialogCancel @click="emit('cancel')">{{ cancelLabel }}</AlertDialogCancel>
+        <AlertDialogAction
+          :class="buttonVariants({ variant: destructive ? 'destructive' : 'default' })"
+          @click="emit('confirm')"
+        >
           {{ confirmLabel }}
         </AlertDialogAction>
       </AlertDialogFooter>

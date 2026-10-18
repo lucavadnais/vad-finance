@@ -144,6 +144,7 @@ async function remove(p: Projection) {
           :projections="projections"
           :min="calendarMin"
           :max="calendarMax"
+          @add="openDialog(null)"
           @edit="openDialog"
         />
       </section>

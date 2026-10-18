@@ -18,6 +18,10 @@ defineProps<{ id: string }>();
       <ShieldCheck class="size-4" :style="{ color: BUFFER_COLOR }" />
       Marge mensuelle pour imprévus
     </Label>
+    <p class="text-sm text-muted-foreground">
+      Parce que des petites dépenses imprévues peuvent s'accumuler rapidement, il est utile de prévoir une marge chaque
+      mois.
+    </p>
     <div class="flex gap-2">
       <div class="relative w-40">
         <Input :id="id" v-model="amount" inputmode="decimal" placeholder="0" class="pr-7 text-right" />
@@ -27,9 +31,5 @@ defineProps<{ id: string }>();
       </div>
       <slot />
     </div>
-    <p class="text-sm text-muted-foreground">
-      Mise de côté chaque mois pour les petites dépenses imprévues (un café, un lunch…). La marge ne compte pas comme un
-      dépassement, sauf si vous la dépassez.
-    </p>
   </div>
 </template>

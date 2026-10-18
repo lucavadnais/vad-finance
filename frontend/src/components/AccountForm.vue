@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { ImagePlus, Info, Plus, Trash2, X } from '@lucide/vue';
 import { accountLogoUrl, api, formatCents, LOGO_TYPES, toCents } from '@/api';
 import { ACCOUNT_TYPES } from '@/lib/labels';
+import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -91,6 +92,11 @@ function onOpenChange(value: boolean) {
 const balanceChanged = computed(
   () => !!props.account && toCents(initialBalance.value) !== props.account.initialBalanceCents,
 );
+const { amountsHidden } = useAmountsHidden();
+// By how much: today's balance and every point of its history move by it
+const balanceShiftCents = computed(() =>
+  props.account ? toCents(initialBalance.value) - props.account.initialBalanceCents : 0,
+);
 
 function notify() {
   if (editing.value) emit('changed');
@@ -172,12 +178,10 @@ function askDelete() {
           <!-- Changing it shifts the whole balance history, not just today's balance -->
           <p v-if="balanceChanged && account" class="text-sm text-muted-foreground">
             Le solde actuel passera de {{ formatCents(account.balanceCents, account.currency) }} à
-            {{
-              formatCents(
-                account.balanceCents - account.initialBalanceCents + toCents(initialBalance),
-                account.currency,
-              )
-            }}, et tout l'historique du solde sera décalé d'autant.
+            {{ formatCents(account.balanceCents + balanceShiftCents, account.currency) }} ({{
+              balanceShiftCents > 0 && !amountsHidden ? '+' : ''
+            }}{{ formatCents(balanceShiftCents, account.currency) }}). Toute la courbe du solde se déplacera du même
+            montant ; vos transactions ne changent pas.
           </p>
           <div class="flex flex-col gap-2">
             <Label>Image <span class="font-normal text-muted-foreground">(facultative)</span></Label>

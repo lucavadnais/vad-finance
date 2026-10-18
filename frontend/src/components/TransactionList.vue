@@ -6,17 +6,18 @@
 import type { Transaction } from '@/types';
 import { ref } from 'vue';
 import { useFinanceData } from '@/composables/useFinanceData';
-import { Table, TableBody, TableEmpty } from '@/components/ui/table';
+import { Receipt } from '@lucide/vue';
+import { Table, TableBody } from '@/components/ui/table';
+import EmptyState from './EmptyState.vue';
 import TransactionEditDialog from './TransactionEditDialog.vue';
 import TransactionRow from './TransactionRow.vue';
 
 // hideAccount: one account's transactions, its logo on each row says nothing.
 // readonly: for reference, no actions menu (nor edit popup)
-const props = withDefaults(
+withDefaults(
   defineProps<{ transactions: Transaction[]; hideAccount?: boolean; readonly?: boolean; empty?: string }>(),
   { empty: 'Aucune transaction' },
 );
-const columns = () => 5 - (props.hideAccount ? 1 : 0) - (props.readonly ? 1 : 0);
 
 const { accounts, categories, refresh, setError } = useFinanceData();
 
@@ -31,7 +32,8 @@ function edit(t: Transaction) {
 <template>
   <!-- Narrow (a phone, a side column): the category goes under the description -->
   <div class="@container">
-    <Table>
+    <EmptyState v-if="transactions.length === 0" :icon="Receipt" :title="empty" />
+    <Table v-else>
       <TableBody>
         <TransactionRow
           v-for="t in transactions"
@@ -43,7 +45,6 @@ function edit(t: Transaction) {
           @changed="refresh"
           @error="setError"
         />
-        <TableEmpty v-if="transactions.length === 0" :colspan="columns()">{{ empty }}</TableEmpty>
       </TableBody>
     </Table>
   </div>

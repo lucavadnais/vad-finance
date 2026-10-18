@@ -13,6 +13,7 @@ import { amountTickFormat } from '@/api';
 import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import EmptyState from '../EmptyState.vue';
 import ExpensesDonut from './ExpensesDonut.vue';
 import SelectedTransactions from './SelectedTransactions.vue';
 import SeriesTable from './SeriesTable.vue';
@@ -135,9 +136,11 @@ const barEvents = {
         </CardAction>
       </CardHeader>
       <CardContent class="max-md:px-0">
-        <p v-if="rows.length === 0" class="py-12 text-center text-sm text-muted-foreground">
-          {{ emptyMessage ?? 'Aucune dépense sur cette période.' }}
-        </p>
+        <EmptyState
+          v-if="rows.length === 0"
+          :icon="ChartPie"
+          :title="emptyMessage ?? 'Aucune dépense sur cette période'"
+        />
         <template v-else>
           <TabsContent value="chart">
             <ChartContainer

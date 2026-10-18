@@ -5,26 +5,19 @@
 import type { Category, Projection } from '@/types';
 import type { ProjectionRow } from './ProjectionTable.vue';
 import { computed, ref } from 'vue';
-import { Search, X } from '@lucide/vue';
 import { formatCents, formatDate } from '@/api';
 import { nextDate, recurrenceLabel } from '@/lib/projections';
+import { SearchX } from '@lucide/vue';
 import { normalizeText } from '@/lib/text';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import ProjectionTable from './ProjectionTable.vue';
+import SearchInput from './SearchInput.vue';
 
 const props = defineProps<{ projections: Projection[]; categories: Category[] }>();
-const emit = defineEmits<{ edit: [projection: Projection]; remove: [projection: Projection] }>();
+const emit = defineEmits<{ add: []; edit: [projection: Projection]; remove: [projection: Projection] }>();
 
 const search = ref('');
 
 // Accents and case do not matter: "electricite" finds "Électricité"
-// Escape clears the search first (in the dialog, it only closes it once empty)
-function clearOnEscape(e: KeyboardEvent) {
-  if (!search.value) return;
-  e.stopPropagation();
-  search.value = '';
-}
 const query = computed(() => normalizeText(search.value));
 const matches = (p: Projection) => {
   const category = props.categories.find((c) => c._id === p.category)?.name ?? '';
@@ -50,27 +43,12 @@ const rows = computed<ProjectionRow[]>(() =>
   <div class="flex flex-col gap-4">
     <!-- The search, and the parent's actions beside it (`actions` slot) -->
     <div class="flex items-center gap-2">
-      <div class="relative min-w-0 flex-1">
-        <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          v-model="search"
-          type="search"
-          placeholder="Nom, catégorie, récurrence, montant…"
-          aria-label="Rechercher une prévision"
-          class="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
-          @keydown.esc="clearOnEscape"
-        />
-        <Button
-          v-if="search"
-          variant="ghost"
-          size="icon-xs"
-          class="absolute top-1/2 right-1.5 -translate-y-1/2"
-          aria-label="Effacer la recherche"
-          @click="search = ''"
-        >
-          <X />
-        </Button>
-      </div>
+      <SearchInput
+        v-model="search"
+        class="min-w-0 flex-1"
+        placeholder="Nom, catégorie, récurrence, montant…"
+        label="Rechercher une prévision"
+      />
       <slot name="actions" />
     </div>
     <ProjectionTable
@@ -79,6 +57,9 @@ const rows = computed<ProjectionRow[]>(() =>
       date-label="Prochaine"
       editable
       :empty="search ? `Aucune prévision pour « ${search.trim()} »` : undefined"
+      :empty-icon="search ? SearchX : undefined"
+      :empty-action="search ? undefined : 'Ajouter une prévision'"
+      @add="emit('add')"
       @edit="emit('edit', $event)"
       @remove="emit('remove', $event)"
     />

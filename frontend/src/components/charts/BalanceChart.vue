@@ -9,6 +9,7 @@ import { formatCents } from '@/api';
 import { TOTAL_SERIES } from '@/lib/chartData';
 import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import EmptyState from '../EmptyState.vue';
 import TrendChart from '../TrendChart.vue';
 import SeriesTable from './SeriesTable.vue';
 
@@ -45,9 +46,7 @@ const formatRowDate = (row: Row) => new Date(row.t).toLocaleDateString('fr-CA', 
         </CardAction>
       </CardHeader>
       <CardContent class="max-md:px-0">
-        <p v-if="rows.length === 0" class="py-12 text-center text-sm text-muted-foreground">
-          Aucune transaction sur cette période.
-        </p>
+        <EmptyState v-if="rows.length === 0" :icon="ChartLine" title="Aucune transaction sur cette période" />
         <template v-else>
           <!-- Like an account's page: the balance in big, its change beside it,
                then the curve -->

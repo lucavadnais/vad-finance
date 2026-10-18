@@ -132,8 +132,14 @@ async function submit() {
       </Tabs>
 
       <div class="flex flex-col gap-2">
-        <Label for="projection-category">Catégorie (facultatif)</Label>
-        <CategorySelect id="projection-category" v-model="category" :categories="kindCategories" class="w-full" />
+        <Label for="projection-category">Catégorie</Label>
+        <CategorySelect
+          id="projection-category"
+          v-model="category"
+          :categories="kindCategories"
+          :new-kind="kind"
+          class="w-full"
+        />
       </div>
 
       <div class="flex flex-col gap-2">

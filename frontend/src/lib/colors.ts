@@ -33,6 +33,12 @@ export const BUFFER_COLOR = '#15064c';
 const toRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 const toHex = (rgb: number[]) => `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
 
+// Light text on a dark color, dark text on a light one
+export function isDark(hex: string) {
+  const [r, g, b] = toRgb(hex).map((v) => v / 255);
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 0.6;
+}
+
 // The color at `alpha` opacity. A '#rrggbb' gives rgba(), which chart
 // animations (d3) can interpolate; color-mix() they would animate as text, its
 // hex digits read as numbers, and end up on another color. Other colors (a

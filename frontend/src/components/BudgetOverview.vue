@@ -10,18 +10,19 @@
 // unselect), and hands its amounts over to the chart below (v-model:focus).
 import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
-import { computed, ref, useTemplateRef, watch, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch, watchEffect } from 'vue';
 import { useElementSize, useScroll } from '@vueuse/core';
-import { ListChecks, Plus, ShieldCheck, TriangleAlert } from '@lucide/vue';
+import { CalendarClock, ListChecks, Plus, ShieldCheck, TriangleAlert } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { budget, budgetSection, estimatedMonth } from '@/lib/budget';
-import { BUFFER_COLOR, NO_COLOR } from '@/lib/colors';
+import { BUFFER_COLOR, NO_COLOR, isDark } from '@/lib/colors';
 import { currentMonth } from '@/lib/projections';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useSettings } from '@/composables/useSettings';
+import EmptyState from './EmptyState.vue';
 
 const props = defineProps<{
   month: Month;
@@ -86,12 +87,6 @@ function split(cents: number) {
   const text = formatCents(cents);
   const i = text.lastIndexOf(',');
   return i < 0 ? { main: text, rest: '' } : { main: text.slice(0, i), rest: text.slice(i) };
-}
-
-// Light text on a dark color, dark text on a light one
-function isDark(hex: string) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 0.6;
 }
 
 type CategoryCard = {
@@ -216,7 +211,9 @@ const { width: stripWidth } = useElementSize(strip);
 const pages = computed(() => {
   void cards.value.length;
   const el = strip.value;
-  return el && stripWidth.value > 0 ? Math.ceil(el.scrollWidth / stripWidth.value - 0.05) : 1;
+  // Both with the strip's padding (stripWidth, the content box, has none): a
+  // strip that fits is one page
+  return el && stripWidth.value > 0 ? Math.ceil(el.scrollWidth / el.clientWidth - 0.05) : 1;
 });
 const page = computed(() => {
   const el = strip.value;
@@ -224,7 +221,122 @@ const page = computed(() => {
   const max = el.scrollWidth - el.clientWidth;
   return Math.round((scrollX.value / max) * (pages.value - 1));
 });
-watch(kind, () => strip.value?.scrollTo({ left: 0 }));
+watch(kind, () => {
+  stopMotion();
+  stretch.value = 0;
+  strip.value?.scrollTo({ left: 0 });
+});
+
+// A mouse drags the strip sideways (its scrollbar is hidden; touch scrolls
+// it natively). Past a few pixels it is a drag: the click that ends it does
+// not select a card. Let go while moving, it glides on, slowing down. Past an
+// end, it stretches (pulled, or carried by its glide) and springs back.
+const drag = ref<{ x: number; left: number; moved: boolean } | null>(null);
+// The last positions, for the speed at release: [time, position]
+let samples: [number, number][] = [];
+// Frame of the glide or the spring running, if any
+let frame = 0;
+const stopMotion = () => cancelAnimationFrame(frame);
+onBeforeUnmount(stopMotion);
+
+// Past an end: the strip shifted by `stretch` px (> 0 past the start), the
+// further pulled the stiffer
+const stretch = ref(0);
+const stripStyle = computed(() => (stretch.value ? { transform: `translateX(${stretch.value}px)` } : undefined));
+const rubber = (over: number, size: number) => (1 - 1 / ((over * 0.55) / size + 1)) * size;
+
+function onPointerDown(e: PointerEvent) {
+  const el = strip.value;
+  if (!el || e.pointerType !== 'mouse' || e.button !== 0) return;
+  stopMotion();
+  drag.value = { x: e.clientX, left: el.scrollLeft - stretch.value, moved: false };
+  samples = [[e.timeStamp, el.scrollLeft]];
+}
+function onPointerMove(e: PointerEvent) {
+  const el = strip.value;
+  const d = drag.value;
+  if (!el || !d) return;
+  // Released outside before it became a drag
+  if (!(e.buttons & 1)) return void (drag.value = null);
+  const dx = e.clientX - d.x;
+  if (!d.moved && Math.abs(dx) < 5) return;
+  if (!d.moved) el.setPointerCapture(e.pointerId);
+  d.moved = true;
+  const max = el.scrollWidth - el.clientWidth;
+  const target = d.left - dx;
+  el.scrollLeft = Math.min(Math.max(target, 0), max);
+  stretch.value =
+    target < 0 ? rubber(-target, el.clientWidth) : target > max ? -rubber(target - max, el.clientWidth) : 0;
+  samples.push([e.timeStamp, target]);
+  samples = samples.filter(([t]) => e.timeStamp - t < 100);
+}
+function onPointerUp(e: PointerEvent) {
+  const moved = drag.value?.moved;
+  drag.value = null;
+  // The click comes right after: swallowed by onClickCapture, then forgotten
+  if (moved) dragged = true;
+  setTimeout(() => (dragged = false));
+  if (!moved) return;
+  if (stretch.value) springBack(0);
+  else startGlide(e.timeStamp);
+}
+let dragged = false;
+function onClickCapture(e: MouseEvent) {
+  if (!dragged) return;
+  e.stopPropagation();
+  e.preventDefault();
+}
+
+// The speed over the last 100 ms (px/ms), then lost little by little; an end
+// reached still moving: the rest of it stretches the strip
+const FRICTION = 0.8; // kept per 16 ms frame
+function startGlide(now: number) {
+  const el = strip.value;
+  // Held still before letting go: no glide
+  const recent = samples.filter(([t]) => now - t < 100);
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  if (!el || !first || !last || last[0] <= first[0]) return;
+  let speed = (last[1] - first[1]) / (last[0] - first[0]);
+  let previous = performance.now();
+  const step = (time: number) => {
+    const dt = Math.min(time - previous, 50);
+    previous = time;
+    const max = el.scrollWidth - el.clientWidth;
+    const next = el.scrollLeft + speed * dt;
+    if (next < 0 || next > max) {
+      el.scrollLeft = next < 0 ? 0 : max;
+      return springBack(-speed);
+    }
+    el.scrollLeft = next;
+    speed *= FRICTION ** (dt / 16);
+    if (Math.abs(speed) > 0.02) frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+}
+
+// A damped spring pulling the stretch back to 0, from `velocity` (px/ms):
+// slightly under-damped, so a fast glide overshoots a little and settles
+const STIFFNESS = 0.0005;
+const DAMPING = 0.035;
+function springBack(velocity: number) {
+  let v = Math.max(-3, Math.min(3, velocity));
+  let x = stretch.value;
+  let previous = performance.now();
+  const step = (time: number) => {
+    // Small steps, for a steady spring whatever the frame rate
+    for (let left = Math.min(time - previous, 50); left > 0; left -= 4) {
+      const dt = Math.min(left, 4);
+      v += (-STIFFNESS * x - DAMPING * v) * dt;
+      x += v * dt;
+    }
+    previous = time;
+    if (Math.abs(x) < 0.5 && Math.abs(v) < 0.01) return void (stretch.value = 0);
+    stretch.value = x;
+    frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+}
 </script>
 
 <template>
@@ -314,106 +426,122 @@ watch(kind, () => strip.value?.scrollTo({ left: 0 }));
       </div>
     </div>
 
-    <!-- The cards, scrolled sideways, edge to edge on a phone. Room above and
-         below (cancelled by the margins) for the selected card's ring: the
-         scrolling strip clips what goes past its edges -->
+    <!-- The cards, scrolled sideways, edge to edge on a phone; with a mouse,
+         dragged, and without snapping (a snap would undo each small step). Room above and below (cancelled by the margins) for the
+         selected card's ring: the scrolling strip clips what goes past its
+         edges -->
     <div
       ref="strip"
-      class="-mx-4 -my-1 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] md:-mx-6 md:scroll-px-6 md:px-6 [&::-webkit-scrollbar]:hidden"
+      class="-mx-4 -my-1 flex snap-x snap-mandatory scroll-px-4 pointer-fine:snap-none gap-3 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] md:-mx-6 md:scroll-px-6 md:px-6 [&::-webkit-scrollbar]:hidden"
+      :class="drag?.moved ? 'cursor-grabbing select-none' : 'pointer-fine:cursor-grab'"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
+      @click.capture="onClickCapture"
+      @dragstart.prevent
     >
-      <!-- Adding a forecast, and under it, managing them all -->
-      <div class="flex w-16 shrink-0 snap-start flex-col gap-2">
-        <button
-          type="button"
-          class="flex flex-1 items-center justify-center rounded-full border-2 text-foreground transition-colors hover:bg-muted"
-          aria-label="Ajouter une prévision"
-          title="Ajouter une prévision"
-          @click="emit('add')"
-        >
-          <Plus class="size-6" />
-        </button>
-        <button
-          type="button"
-          class="flex size-16 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80"
-          aria-label="Gérer les prévisions"
-          title="Gérer les prévisions"
-          @click="emit('manage')"
-        >
-          <ListChecks class="size-5" />
-        </button>
-      </div>
-      <template v-for="c in cards" :key="c.key">
-        <!-- The buffer apart from the categories -->
-        <Separator v-if="c.buffer" orientation="vertical" class="self-center data-[orientation=vertical]:h-32" />
-        <button
-          type="button"
-          class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl p-4 text-left shadow-sm transition active:scale-[0.98]"
-          :style="{ background: c.buffer ? BUFFER_BACKGROUND : c.color }"
-          :class="[
-            isDark(c.color) ? 'text-white' : 'text-neutral-900',
-            selected === c.key && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
-            selected && selected !== c.key && 'opacity-50',
-          ]"
-          :aria-pressed="selected === c.key"
-          @click="select(c.key)"
-        >
-          <!-- The name (on two lines if need be: the card is narrow), its share
-               of the total beside it - under the buffer's shield -->
-          <span class="flex items-start gap-2">
-            <span class="line-clamp-2 text-base leading-tight font-medium break-words" :title="c.label">
-              {{ c.label }}
-            </span>
-            <span class="mt-0.5 ml-auto flex shrink-0 flex-col items-end gap-1">
-              <ShieldCheck v-if="c.buffer" class="size-4" />
-              <span class="text-xs tabular-nums opacity-75">{{ share(c) }} %</span>
-            </span>
-          </span>
-          <!-- What already went out (or came in), the forecast under it -->
-          <span class="truncate text-xl font-semibold tabular-nums">
-            {{ split(c.actualCents).main }}<span class="text-sm font-medium">{{ split(c.actualCents).rest }}</span>
-          </span>
-          <span class="truncate text-xs tabular-nums opacity-75">sur {{ formatCents(c.plannedCents) }} prévus</span>
-          <!-- What really happened against the forecast -->
-          <span
-            class="mt-auto h-1 w-full shrink-0 overflow-hidden rounded-full"
-            :class="isDark(c.color) ? 'bg-white/25' : 'bg-black/10'"
-            :title="`${formatCents(c.actualCents)} réalisés`"
+      <!-- The content stretches past an end, not the strip: it keeps clipping -->
+      <div class="flex min-w-full shrink-0 gap-3" :style="stripStyle">
+        <!-- Adding a forecast, and under it, managing them all -->
+        <div class="flex w-16 shrink-0 snap-start flex-col gap-2">
+          <button
+            type="button"
+            class="flex flex-1 items-center justify-center rounded-full border-2 text-foreground transition-colors hover:bg-muted"
+            aria-label="Ajouter une prévision"
+            title="Ajouter une prévision"
+            @click="emit('add')"
           >
+            <Plus class="size-6" />
+          </button>
+          <button
+            type="button"
+            class="flex size-16 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-secondary/80"
+            aria-label="Gérer les prévisions"
+            title="Gérer les prévisions"
+            @click="emit('manage')"
+          >
+            <ListChecks class="size-5" />
+          </button>
+        </div>
+        <template v-for="c in cards" :key="c.key">
+          <!-- The buffer apart from the categories -->
+          <Separator v-if="c.buffer" orientation="vertical" class="self-center data-[orientation=vertical]:h-32" />
+          <button
+            type="button"
+            class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl p-4 text-left shadow-sm transition active:scale-[0.98]"
+            :style="{ background: c.buffer ? BUFFER_BACKGROUND : c.color }"
+            :class="[
+              isDark(c.color) ? 'text-white' : 'text-neutral-900',
+              selected === c.key && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+              selected && selected !== c.key && 'opacity-50',
+            ]"
+            :aria-pressed="selected === c.key"
+            @click="select(c.key)"
+          >
+            <!-- The name (on two lines if need be: the card is narrow), its share
+               of the total beside it - under the buffer's shield -->
+            <span class="flex items-start gap-2">
+              <span class="line-clamp-2 text-base leading-tight font-medium break-words" :title="c.label">
+                {{ c.label }}
+              </span>
+              <span class="mt-0.5 ml-auto flex shrink-0 flex-col items-end gap-1">
+                <ShieldCheck v-if="c.buffer" class="size-4" />
+                <span class="text-xs tabular-nums opacity-75">{{ share(c) }} %</span>
+              </span>
+            </span>
+            <!-- What already went out (or came in), the forecast under it -->
+            <span class="truncate text-xl font-semibold tabular-nums">
+              {{ split(c.actualCents).main }}<span class="text-sm font-medium">{{ split(c.actualCents).rest }}</span>
+            </span>
+            <span class="truncate text-xs tabular-nums opacity-75">sur {{ formatCents(c.plannedCents) }} prévus</span>
+            <!-- What really happened against the forecast -->
             <span
-              class="block h-full rounded-full"
-              :class="isDark(c.color) ? 'bg-white' : 'bg-neutral-900'"
-              :style="{ width: `${progress(c)}%` }"
-            />
-          </span>
-        </button>
-      </template>
-      <!-- With no forecast: what went out (or came in) anyway, selected like a
+              class="mt-auto h-1 w-full shrink-0 overflow-hidden rounded-full"
+              :class="isDark(c.color) ? 'bg-white/25' : 'bg-black/10'"
+              :title="`${formatCents(c.actualCents)} réalisés`"
+            >
+              <span
+                class="block h-full rounded-full"
+                :class="isDark(c.color) ? 'bg-white' : 'bg-neutral-900'"
+                :style="{ width: `${progress(c)}%` }"
+              />
+            </span>
+          </button>
+        </template>
+        <!-- With no forecast: what went out (or came in) anyway, selected like a
            card: its transactions then show below, in place of the chart. Not
            when the buffer covers it -->
-      <button
-        v-if="showUnplanned"
-        type="button"
-        class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl border-2 border-dashed border-muted-foreground/40 bg-card p-4 text-left shadow-sm transition active:scale-[0.98]"
-        :class="[
-          selected === UNPLANNED && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
-          selected && selected !== UNPLANNED && 'opacity-50',
-        ]"
-        :aria-pressed="selected === UNPLANNED"
-        title="Voir les transactions non prévues"
-        @click="select(UNPLANNED)"
-      >
-        <span class="truncate text-base font-medium">Non prévu</span>
-        <span class="truncate text-xl font-semibold tabular-nums">
-          {{ split(section.unplannedCents).main
-          }}<span class="text-sm font-medium">{{ split(section.unplannedCents).rest }}</span>
-        </span>
-        <span class="mt-auto self-start truncate rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-          {{ unplannedTransactions.length }} transaction(s)
-        </span>
-      </button>
-      <p v-if="cards.length === 0" class="flex h-40 shrink-0 items-center px-2 text-sm text-muted-foreground">
-        Aucune prévision ce mois-ci.
-      </p>
+        <button
+          v-if="showUnplanned"
+          type="button"
+          class="flex h-44 w-40 shrink-0 snap-start flex-col rounded-3xl border-2 border-dashed border-muted-foreground/40 bg-card p-4 text-left shadow-sm transition active:scale-[0.98]"
+          :class="[
+            selected === UNPLANNED && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+            selected && selected !== UNPLANNED && 'opacity-50',
+          ]"
+          :aria-pressed="selected === UNPLANNED"
+          title="Voir les transactions non prévues"
+          @click="select(UNPLANNED)"
+        >
+          <span class="truncate text-base font-medium">Non prévu</span>
+          <span class="truncate text-xl font-semibold tabular-nums">
+            {{ split(section.unplannedCents).main
+            }}<span class="text-sm font-medium">{{ split(section.unplannedCents).rest }}</span>
+          </span>
+          <span class="mt-auto self-start truncate rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            {{ unplannedTransactions.length }} transaction(s)
+          </span>
+        </button>
+        <!-- Beside the "+" and the list, which stay: centered in the room left.
+           Not once any card shows (the buffer is one, "Non prévu" too) -->
+        <EmptyState
+          v-if="cards.length === 0 && !showUnplanned"
+          :icon="CalendarClock"
+          title="Aucune prévision ce mois-ci"
+          class="h-44 min-w-56 shrink-0 p-4 md:p-4"
+        />
+      </div>
     </div>
     <!-- Where the strip is -->
     <div v-if="pages > 1" class="flex justify-center gap-1.5" aria-hidden="true">

@@ -35,10 +35,6 @@ function onDrop(e: DragEvent) {
   <Card>
     <CardHeader>
       <CardTitle>Ajouter des transactions</CardTitle>
-      <CardDescription>
-        Déposez le relevé CSV de votre banque : vous choisirez le compte et vérifierez les transactions avant de les
-        importer.
-      </CardDescription>
     </CardHeader>
     <CardContent class="flex flex-col gap-4">
       <div

@@ -5,12 +5,11 @@
 // one picked in the accounts' total card), without its logo on each row.
 import type { Account, Category, Transaction } from '@/types';
 import { computed, onMounted, ref, watch } from 'vue';
-import { ChevronLeft, ChevronRight, Copy, Search, TriangleAlert, X } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, Copy, Receipt, SearchX, TriangleAlert } from '@lucide/vue';
 import { refDebounced, useMediaQuery } from '@vueuse/core';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
   Pagination,
   PaginationContent,
@@ -19,11 +18,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Table, TableBody, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useDuplicateReview } from '@/composables/useDuplicateReview';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useTransferReview } from '@/composables/useTransferReview';
+import EmptyState from './EmptyState.vue';
 import OptionSelect from './OptionSelect.vue';
+import SearchInput from './SearchInput.vue';
 import TransactionEditDialog from './TransactionEditDialog.vue';
 import TransactionRow from './TransactionRow.vue';
 
@@ -161,27 +162,12 @@ const range = computed(() => {
         >
         <template v-else>{{ total }} transaction(s), les plus récentes en premier.</template>
       </CardDescription>
-      <div class="relative mt-2">
-        <Search class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          v-model="search"
-          type="search"
-          placeholder="Description, compte, catégorie, montant…"
-          aria-label="Rechercher une transaction"
-          class="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
-          @keydown.esc="search = ''"
-        />
-        <Button
-          v-if="search"
-          variant="ghost"
-          size="icon-xs"
-          class="absolute top-1/2 right-1.5 -translate-y-1/2"
-          aria-label="Effacer la recherche"
-          @click="search = ''"
-        >
-          <X />
-        </Button>
-      </div>
+      <SearchInput
+        v-model="search"
+        class="mt-2"
+        placeholder="Description, compte, catégorie, montant…"
+        label="Rechercher une transaction"
+      />
     </CardHeader>
     <!-- When the parent caps the card's height, the rows scroll under a sticky
          header and the pagination stays visible -->
@@ -189,8 +175,14 @@ const range = computed(() => {
       <div
         class="flex min-h-0 flex-1 flex-col *:data-[slot=table-container]:min-h-0 *:data-[slot=table-container]:flex-1"
       >
+        <EmptyState
+          v-if="items.length === 0 && !loading"
+          :icon="query ? SearchX : Receipt"
+          :title="query ? 'Aucune transaction ne correspond à la recherche' : 'Aucune transaction'"
+          :description="query ? 'Essayez avec d’autres mots.' : 'Importez un relevé ou ajoutez une transaction.'"
+        />
         <!-- While the next page loads, the current one stays, dimmed -->
-        <Table :class="loading && 'opacity-60 transition-opacity'">
+        <Table v-else :class="loading && 'opacity-60 transition-opacity'">
           <TableHeader class="sticky top-0 z-10 bg-card max-md:bg-background">
             <TableRow>
               <TableHead v-if="!account" class="w-px pr-0"><span class="sr-only">Compte</span></TableHead>
@@ -210,9 +202,6 @@ const range = computed(() => {
               @changed="emit('changed')"
               @error="emit('error', $event)"
             />
-            <TableEmpty v-if="items.length === 0 && !loading" :colspan="account ? 4 : 5">
-              {{ query ? 'Aucune transaction ne correspond à la recherche' : 'Aucune transaction' }}
-            </TableEmpty>
           </TableBody>
         </Table>
       </div>

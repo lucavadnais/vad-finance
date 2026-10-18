@@ -3,17 +3,19 @@
 // an amount (on a phone, the date goes under the name). With `editable`, each
 // row can be edited or deleted; on a phone, tapping the row edits it (the
 // deletion is at the bottom of the edit dialog).
+import type { Component } from 'vue';
 import type { Category, Projection } from '@/types';
-import { ChevronRight, Pencil, Trash2 } from '@lucide/vue';
+import { CalendarClock, ChevronRight, Pencil, Trash2 } from '@lucide/vue';
 import { useMediaQuery } from '@vueuse/core';
 import { formatCents } from '@/api';
 import { recurrenceLabel } from '@/lib/projections';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useFinanceData } from '@/composables/useFinanceData';
 import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
+import EmptyState from './EmptyState.vue';
 
 export interface ProjectionRow {
   projection: Projection;
@@ -31,11 +33,15 @@ const props = withDefaults(
     categories: Category[];
     dateLabel: string;
     editable?: boolean;
+    // Said in the table's place when there is no row, with its icon
     empty?: string;
+    emptyIcon?: Component;
+    // A button adding the first one there (`add`)
+    emptyAction?: string;
   }>(),
   { editable: false, empty: 'Aucune prévision' },
 );
-const emit = defineEmits<{ edit: [projection: Projection]; remove: [projection: Projection] }>();
+const emit = defineEmits<{ add: []; edit: [projection: Projection]; remove: [projection: Projection] }>();
 
 const { categoryColors } = useFinanceData();
 
@@ -45,7 +51,14 @@ const categoryName = (id: string | null) => props.categories.find((c) => c._id =
 </script>
 
 <template>
-  <Table>
+  <EmptyState
+    v-if="rows.length === 0"
+    :icon="emptyIcon ?? CalendarClock"
+    :title="empty"
+    :action-label="emptyAction"
+    @action="emit('add')"
+  />
+  <Table v-else>
     <TableHeader class="sticky top-0 z-10 bg-background">
       <TableRow>
         <TableHead>Nom</TableHead>
@@ -102,7 +115,6 @@ const categoryName = (id: string | null) => props.categories.find((c) => c._id =
           </div>
         </TableCell>
       </TableRow>
-      <TableEmpty v-if="rows.length === 0" :colspan="4">{{ empty }}</TableEmpty>
     </TableBody>
   </Table>
 </template>

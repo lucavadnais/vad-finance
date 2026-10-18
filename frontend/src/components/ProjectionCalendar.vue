@@ -9,6 +9,7 @@ import type { Month } from '@/lib/projections';
 import { computed } from 'vue';
 import { CalendarDate } from '@internationalized/date';
 import { CalendarRoot } from 'reka-ui';
+import { CalendarClock } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { occurrences } from '@/lib/projections';
 import { cn } from '@/lib/utils';
@@ -25,10 +26,11 @@ import {
   CalendarNextButton,
   CalendarPrevButton,
 } from '@/components/ui/calendar';
+import EmptyState from './EmptyState.vue';
 
 const month = defineModel<Month>({ required: true });
 const props = defineProps<{ projections: Projection[]; min: Month; max: Month }>();
-const emit = defineEmits<{ edit: [projection: Projection] }>();
+const emit = defineEmits<{ add: []; edit: [projection: Projection] }>();
 
 const toDate = ({ year, month }: Month, day = 1) => new CalendarDate(year, month + 1, day);
 
@@ -74,9 +76,13 @@ const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
 <template>
   <!-- Phone: the schedule -->
   <div class="md:hidden">
-    <p v-if="schedule.length === 0" class="py-8 text-center text-sm text-muted-foreground">
-      Aucune prévision ce mois-ci.
-    </p>
+    <EmptyState
+      v-if="schedule.length === 0"
+      :icon="CalendarClock"
+      title="Aucune prévision ce mois-ci"
+      action-label="Ajouter une prévision"
+      @action="emit('add')"
+    />
     <ol v-else class="flex flex-col">
       <li
         v-for="d in schedule"

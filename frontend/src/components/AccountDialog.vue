@@ -223,6 +223,7 @@ async function submit() {
                       v-model="t.category"
                       :categories="categories"
                       :allow-transfer="accounts.length > 1"
+                      :new-kind="t.amountCents < 0 ? 'expense' : 'income'"
                       class="h-8 w-44"
                     />
                     <AccountSelect

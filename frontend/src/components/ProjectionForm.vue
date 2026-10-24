@@ -57,11 +57,15 @@ function reset() {
   startDate.value = p ? toDateInput(p.startDate) : isoDay(now.getFullYear(), now.getMonth(), now.getDate());
   category.value = p?.category ?? null;
   hasEnd.value = !!p?.endDate;
-  // Defaults to a year from now
-  endDate.value = p?.endDate ? toDateInput(p.endDate) : isoDay(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  endDate.value = p?.endDate ? toDateInput(p.endDate) : undefined;
   error.value = '';
 }
 reset();
+
+// Turned on without a date yet: starts from the start date
+watch(hasEnd, (on) => {
+  if (on && !endDate.value) endDate.value = startDate.value;
+});
 
 const unit = computed(() => {
   if (recurrence.value === 'once') return '';
@@ -164,14 +168,6 @@ async function submit() {
       </div>
 
       <div class="grid grid-cols-2 gap-3">
-        <div v-if="recurrence !== 'once'" class="flex flex-col gap-2">
-          <Label for="projection-interval">Fréquence</Label>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">{{ Number(interval) > 1 ? 'Aux' : 'Chaque' }}</span>
-            <Input id="projection-interval" v-model="interval" type="number" min="1" max="99" class="w-16" required />
-            <span class="text-sm">{{ unit }}</span>
-          </div>
-        </div>
         <div class="flex flex-col gap-2" :class="recurrence === 'once' && 'col-span-2'">
           <Label>
             {{ recurrence === 'once' ? 'Date' : 'À partir du' }}
@@ -181,12 +177,29 @@ async function submit() {
           </Label>
           <DatePicker v-model="startDate" class="w-full" />
         </div>
+        <div v-if="recurrence !== 'once'" class="flex flex-col gap-2">
+          <Label for="projection-interval">Fréquence</Label>
+          <div class="flex items-center gap-2">
+            <span class="text-sm">{{ Number(interval) > 1 ? 'Aux' : 'Chaque' }}</span>
+            <Input id="projection-interval" v-model="interval" type="number" min="1" max="99" class="w-16" required />
+            <span class="text-sm">{{ unit }}</span>
+          </div>
+        </div>
       </div>
 
-      <div v-if="recurrence !== 'once'" class="flex min-h-9 flex-wrap items-center gap-3">
-        <Switch id="projection-has-end" v-model="hasEnd" />
-        <Label for="projection-has-end" class="font-normal">Date de fin</Label>
-        <DatePicker v-if="hasEnd" v-model="endDate" class="ml-auto w-44" />
+      <!-- The switch, as its label, turns the date on. Off, the field is empty,
+           but keeps the date for when it is turned back on -->
+      <div v-if="recurrence !== 'once'" class="flex flex-col gap-2">
+        <div class="flex items-center gap-2">
+          <Label for="projection-has-end">Date de fin</Label>
+          <Switch id="projection-has-end" v-model="hasEnd" />
+        </div>
+        <DatePicker
+          :model-value="hasEnd ? endDate : undefined"
+          :disabled="!hasEnd"
+          class="w-full"
+          @update:model-value="endDate = $event"
+        />
       </div>
 
       <p v-if="error" class="text-sm text-destructive">{{ error }}</p>

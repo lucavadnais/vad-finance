@@ -54,7 +54,7 @@ const rows = computed<ProjectionRow[]>(() =>
     <ProjectionTable
       :rows="rows"
       :categories="categories"
-      date-label="Prochaine"
+      date-label="Prochaine transaction"
       editable
       :empty="search ? `Aucune prévision pour « ${search.trim()} »` : undefined"
       :empty-icon="search ? SearchX : undefined"

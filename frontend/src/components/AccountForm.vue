@@ -5,7 +5,7 @@
 // current balance and works it out (AccountDialog); editing can change it.
 import type { Account, AccountType } from '@/types';
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { ImagePlus, Info, Plus, Trash2, X } from '@lucide/vue';
+import { ImagePlus, Info, Plus, Trash2 } from '@lucide/vue';
 import { accountLogoUrl, api, formatCents, LOGO_TYPES, toCents } from '@/api';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
@@ -40,14 +40,25 @@ const initialBalance = ref('0');
 const saving = ref(false);
 const error = ref('');
 
-// Optional image (bank logo...), uploaded right after the account is saved.
-// When editing, `removeLogo` drops the current one instead.
+// Optional image, sent right after the account is saved: one of the logos
+// below (public/account-logos) or a custom one. The custom tile holds the file
+// just picked, else the account's current image. Clicking a tile selects it,
+// clicking it again unselects it; nothing is replaced or removed before saving.
+const presetSrc = (key: string) => `/account-logos/${key}.png`;
+const PRESET_LOGOS = [
+  { key: 'desjardins', label: 'Desjardins' },
+  { key: 'bnc', label: 'Banque Nationale' },
+  { key: 'cibc', label: 'CIBC' },
+  { key: 'visa', label: 'Visa' },
+  { key: 'mastercard', label: 'Mastercard' },
+].map((logo) => ({ ...logo, src: presetSrc(logo.key) }));
+const CUSTOM = 'custom';
+// CUSTOM, a preset key, or null for no image
+const selected = ref<string | null>(null);
 const logoInput = ref<HTMLInputElement | null>(null);
 const logo = ref<File | null>(null);
 const preview = ref<string | null>(null);
-const removeLogo = ref(false);
-const currentLogo = computed(() => (props.account && !removeLogo.value ? accountLogoUrl(props.account) : null));
-const shownLogo = computed(() => preview.value ?? currentLogo.value);
+const customLogo = computed(() => preview.value ?? (props.account ? accountLogoUrl(props.account) : null));
 
 function setLogo(file: File | null) {
   if (preview.value) URL.revokeObjectURL(preview.value);
@@ -55,21 +66,44 @@ function setLogo(file: File | null) {
   preview.value = file ? URL.createObjectURL(file) : null;
 }
 
-function clearLogo() {
-  if (logo.value) setLogo(null);
-  else removeLogo.value = true;
+function toggle(key: string) {
+  selected.value = selected.value === key ? null : key;
 }
 
 function onLogoChange(e: Event) {
   const target = e.target as HTMLInputElement;
   const file = target.files?.[0] ?? null;
   target.value = '';
-  if (file && !LOGO_TYPES.includes(file.type)) {
+  if (!file) return;
+  if (!LOGO_TYPES.includes(file.type)) {
     error.value = 'Image PNG, JPEG, WebP ou GIF seulement';
     return;
   }
   error.value = '';
   setLogo(file);
+  selected.value = CUSTOM;
+}
+
+// A preset is sent like a custom file, so the account keeps its own copy
+async function presetFile(key: string) {
+  const res = await fetch(presetSrc(key));
+  if (!res.ok) throw new Error('logo introuvable');
+  return new File([await res.blob()], `${key}.png`, { type: 'image/png' });
+}
+
+// After the account is saved: true when its image changed
+async function saveLogo(id: string) {
+  if (selected.value === CUSTOM) {
+    // The account's current image, still selected: nothing to do
+    if (!logo.value) return false;
+    await api.uploadAccountLogo(id, logo.value);
+  } else if (selected.value) {
+    await api.uploadAccountLogo(id, await presetFile(selected.value));
+  } else {
+    if (!props.account?.logoUpdatedAt) return false;
+    await api.deleteAccountLogo(id);
+  }
+  return true;
 }
 
 onBeforeUnmount(() => setLogo(null));
@@ -83,8 +117,8 @@ function onOpenChange(value: boolean) {
     type.value = a?.type ?? 'checking';
     initialBalance.value = a ? String(a.initialBalanceCents / 100).replace('.', ',') : '0';
     error.value = '';
-    removeLogo.value = false;
     setLogo(null);
+    selected.value = a?.logoUpdatedAt ? CUSTOM : null;
   }
   open.value = value;
 }
@@ -113,10 +147,7 @@ async function submit() {
     open.value = false;
     notify();
     try {
-      if (logo.value) await api.uploadAccountLogo(account._id, logo.value);
-      else if (removeLogo.value) await api.deleteAccountLogo(account._id);
-      else return;
-      notify();
+      if (await saveLogo(account._id)) notify();
     } catch (err) {
       emit('error', `Compte enregistré, mais l'image n'a pas pu être mise à jour : ${(err as Error).message}`);
     }
@@ -148,13 +179,7 @@ function askDelete() {
       <form class="flex flex-col gap-4" @submit.prevent="submit">
         <DialogHeader>
           <DialogTitle>{{ editing ? 'Modifier le compte' : 'Nouveau compte' }}</DialogTitle>
-          <DialogDescription>
-            {{
-              editing
-                ? 'Son nom, son type, son solde initial et son image.'
-                : 'Un compte que vous voulez suivre : chèque, épargne, carte de crédit…'
-            }}
-          </DialogDescription>
+          <DialogDescription v-if="editing"> Son nom, son type, son solde initial et son image. </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
@@ -185,16 +210,45 @@ function askDelete() {
           </p>
           <div class="flex flex-col gap-2">
             <Label>Image <span class="font-normal text-muted-foreground">(facultative)</span></Label>
-            <div v-if="shownLogo" class="flex w-fit items-center gap-1 rounded-md border px-1.5 py-1">
-              <img :src="shownLogo" alt="Image du compte" class="size-6 rounded object-contain" />
-              <Button type="button" size="icon-xs" variant="ghost" aria-label="Retirer l'image" @click="clearLogo">
-                <X />
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                v-if="customLogo"
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Image personnalisée"
+                title="Image personnalisée"
+                :aria-pressed="selected === CUSTOM"
+                :class="selected === CUSTOM && 'border-2 border-primary'"
+                @click="toggle(CUSTOM)"
+              >
+                <img :src="customLogo" alt="" class="size-6 rounded object-contain" />
+              </Button>
+              <Button
+                v-for="p in PRESET_LOGOS"
+                :key="p.key"
+                type="button"
+                variant="outline"
+                size="icon"
+                :aria-label="p.label"
+                :title="p.label"
+                :aria-pressed="selected === p.key"
+                :class="selected === p.key && 'border-2 border-primary'"
+                @click="toggle(p.key)"
+              >
+                <img :src="p.src" alt="" class="size-6 object-contain" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Choisir une image personnalisée"
+                title="Choisir une image personnalisée"
+                @click="logoInput?.click()"
+              >
+                <ImagePlus />
               </Button>
             </div>
-            <Button v-else type="button" variant="outline" class="w-fit" @click="logoInput?.click()">
-              <ImagePlus />
-              Choisir une image
-            </Button>
             <input ref="logoInput" type="file" :accept="LOGO_TYPES.join(',')" hidden @change="onLogoChange" />
           </div>
 

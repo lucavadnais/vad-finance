@@ -54,7 +54,7 @@ function onDrop(e: DragEvent) {
           <template v-else-if="fileName">{{ fileName }}</template>
           <template v-else>Glissez votre relevé CSV ici</template>
         </p>
-        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground">Banques supportées : CIBC & BNC</p>
+        <p v-if="!loading && !fileName" class="text-sm text-muted-foreground">Banques supportées : CIBC, BNC & Desjardins</p>
         <input ref="input" type="file" accept=".csv,text/csv" hidden @change="onInputChange" />
       </div>
 

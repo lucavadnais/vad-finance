@@ -1,4 +1,4 @@
-// Parses a bank CSV export, in either of two formats:
+// Parses a bank CSV export, in one of these formats:
 //
 // - No header row (CIBC):
 //     date,description,withdrawal,deposit
@@ -7,12 +7,18 @@
 //     Date,Description,Categorie,Debit,Credit,Solde
 //     2026-09-25,Explorai Inc,Revenus,0,982.24,19054.55
 //   Separated by commas or semicolons; amounts as "982.24" or "982,24".
+// - No header row, date in the 4th column (Desjardins). An account (EOP, ES…)
+//   has its type in the 3rd column, withdrawal and deposit in the 8th and 9th:
+//     Caisse,0152765,EOP,2026/09/11,00012,Achat /STARBUCKS,"",11.87,"",…,843.53,""
+//   A credit card leaves the 2nd and 3rd empty, purchase and payment in the 12th and 13th:
+//     Boni Visa **** 0123,"","",2026/09/04,00003,IGA TELLIER,"","","","","",61.10,""
 //
 // Returns transactions in the same shape as the Transaction model
 // (negative amountCents = expense) plus the lines that could not be read.
 // With a header, each transaction also carries the bank's category name.
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DESJARDINS_DATE_RE = /^\d{4}\/\d{2}\/\d{2}$/;
 
 // Header names (lowercase, no accents) of each column we read
 const COLUMNS = {
@@ -45,8 +51,11 @@ export function parseTransactionsCsv(text) {
   // Column positions: from the header when there is one, else the CIBC order
   let columns = { date: 0, description: 1, withdrawal: 2, deposit: 3 };
   let start = 0;
+  let desjardins = false;
   const header = split(lines[first]).map(normalize);
-  if (header.includes('date')) {
+  if (DESJARDINS_DATE_RE.test(header[3] ?? '')) {
+    desjardins = true;
+  } else if (header.includes('date')) {
     columns = {};
     for (const [key, names] of Object.entries(COLUMNS)) {
       const index = header.findIndex((h) => names.includes(h));
@@ -71,9 +80,16 @@ export function parseTransactionsCsv(text) {
 
     try {
       const fields = split(line);
+      // Desjardins, per line: account type filled (EOP, ES…) means an account,
+      // empty means a credit card
+      if (desjardins) {
+        columns = fields[2]
+          ? { date: 3, description: 5, withdrawal: 7, deposit: 8 }
+          : { date: 3, description: 5, withdrawal: 11, deposit: 12 };
+      }
       const field = (key) => (columns[key] === undefined ? '' : (fields[columns[key]] ?? ''));
 
-      const date = field('date');
+      const date = desjardins ? field('date').replaceAll('/', '-') : field('date');
       if (!DATE_RE.test(date) || Number.isNaN(Date.parse(date))) {
         throw new Error(`date invalide « ${date} »`);
       }
@@ -87,7 +103,9 @@ export function parseTransactionsCsv(text) {
       // BNC lists fees waived as 0 debit and 0 credit: skipped, not an error
       if (amountCents === 0) return;
 
-      const transaction = { date, description: field('description'), amountCents };
+      // Desjardins pads card descriptions with runs of spaces ("IGA 677     MONTREAL")
+      const description = desjardins ? field('description').replace(/\s+/g, ' ') : field('description');
+      const transaction = { date, description, amountCents };
       if (columns.category !== undefined) transaction.bankCategory = field('category');
       transactions.push(transaction);
     } catch (err) {

@@ -83,7 +83,7 @@ const tile = 'flex size-9 shrink-0 items-center justify-center rounded-lg bg-pri
             <span :class="tile"><Upload class="size-4" /></span>
             <span class="flex min-w-0 flex-col">
               <span class="font-medium">{{ loading ? 'Lecture en cours…' : 'Importer un relevé CSV' }}</span>
-              <span class="text-sm text-muted-foreground">CIBC et BNC</span>
+              <span class="text-sm text-muted-foreground">CIBC, BNC et Desjardins</span>
             </span>
             <ChevronRight class="ml-auto size-4 text-muted-foreground" />
           </button>

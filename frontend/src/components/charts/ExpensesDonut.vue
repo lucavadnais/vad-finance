@@ -6,6 +6,7 @@ import type { ChartConfig } from '@/components/ui/chart';
 import type { ChartSelection, Row, Series } from '@/lib/chartData';
 import { OTHER_KEY } from '@/lib/chartData';
 import { computed } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { Donut } from '@unovis/ts';
 import { VisDonut, VisSingleContainer, VisTooltip } from '@unovis/vue';
 import { formatCents } from '@/api';
@@ -55,9 +56,12 @@ const config = computed<ChartConfig>(() =>
   Object.fromEntries(segments.value.map((s) => [s.key, { label: s.label, color: s.color }])),
 );
 const tooltipRow = (s: Segment) => ({ label: `${percent(s.value)} des dépenses`, [s.key]: s.value });
+// Phone: the slices do nothing when tapped (no selection, no tooltip): the
+// list's rows open the selection
+const phone = useMediaQuery('(max-width: 767px)');
 const events = {
   [Donut.selectors.segment]: {
-    click: (d: { data: Segment }) => emit('select', { keys: d.data.keys, label: d.data.label }),
+    click: (d: { data: Segment }) => !phone.value && emit('select', { keys: d.data.keys, label: d.data.label }),
   },
 };
 const triggers = {
@@ -81,7 +85,8 @@ const triggers = {
           :sort-function="() => 0"
           :events="events"
         />
-        <VisTooltip :triggers="triggers" />
+        <!-- Phone: no tooltip either, the list says it all -->
+        <VisTooltip v-if="!phone" :triggers="triggers" />
       </VisSingleContainer>
     </ChartContainer>
 

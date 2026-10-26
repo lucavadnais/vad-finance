@@ -27,7 +27,7 @@ const props = defineProps<{
   bucketLabel: string;
   // Short axis label for a bucket (defaults to the row label)
   formatTick?: (row: Row) => string;
-  // The clicked segment and its transactions, shown under the chart
+  // The clicked segment and its transactions, shown in a dialog
   selection: ChartSelection | null;
   selectedTransactions: Transaction[];
   // The share only, no views to pick (a single month: no bars to compare)
@@ -195,7 +195,7 @@ const barEvents = {
             <SeriesTable :rows="rows" :series="series" :bucket-label="bucketLabel" show-total />
           </TabsContent>
         </template>
-        <!-- The list follows the chart and share views, not the table -->
+        <!-- The clicked segment's transactions: the chart and share views, not the table -->
         <SelectedTransactions
           v-if="view !== 'table'"
           :selection="selection"

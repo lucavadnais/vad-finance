@@ -1,0 +1,8 @@
+# Dev Container override: use the image built by initializeCommand instead of
+# letting VS Code build it. VS Code builds through compose's bake from a
+# generated Dockerfile outside the project, which recent Docker versions
+# (buildx 0.37.2+) refuse to read
+services:
+  app:
+    build: !reset null
+    image: finance-app

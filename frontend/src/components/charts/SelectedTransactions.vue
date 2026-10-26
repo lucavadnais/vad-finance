@@ -1,69 +1,48 @@
 <script setup lang="ts">
-// The transactions behind the clicked bar segment or donut slice
+// The transactions behind the clicked bar segment or donut slice, in the app's
+// dialog (the bottom sheet on a phone), listed like everywhere else
 import type { ChartSelection } from '@/lib/chartData';
 import type { Transaction } from '@/types';
-import { computed } from 'vue';
-import { X } from '@lucide/vue';
-import { formatCents, formatDate } from '@/api';
-import { useFinanceData } from '@/composables/useFinanceData';
-import CategoryDot from '../CategoryDot.vue';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { computed, ref, watch } from 'vue';
+import { formatCents } from '@/api';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import TransactionList from '../TransactionList.vue';
 
 const props = defineProps<{ selection: ChartSelection | null; transactions: Transaction[] }>();
 const emit = defineEmits<{ close: [] }>();
 
-const { categoryColors } = useFinanceData();
-
-const total = computed(() => props.transactions.reduce((sum, t) => sum - t.amountCents, 0));
-// "Autres" and groups span several categories: show which one each row is in
-const showCategory = computed(() => new Set(props.transactions.map((t) => t.category?._id ?? null)).size > 1);
+// The last selection shown, kept while the dialog closes (its selection is
+// already gone), so it does not flash empty on its way out
+const shown = ref<{ label: string; transactions: Transaction[] } | null>(null);
+watch(
+  () => [props.selection, props.transactions] as const,
+  ([selection, transactions]) => {
+    if (selection) shown.value = { label: selection.label, transactions };
+  },
+  { immediate: true },
+);
+const total = computed(() => (shown.value?.transactions ?? []).reduce((sum, t) => sum - t.amountCents, 0));
 </script>
 
 <template>
-  <Collapsible :open="!!selection">
-    <CollapsibleContent>
-      <div v-if="selection" class="mt-4 rounded-lg border">
-        <div class="flex items-center gap-2 border-b px-4 py-2">
-          <span class="font-medium">{{ selection.label }}</span>
-          <span class="text-sm text-muted-foreground">
-            · {{ transactions.length }} transaction(s) · {{ formatCents(total) }}
-          </span>
-          <Button size="icon-sm" variant="ghost" class="ml-auto" aria-label="Fermer" @click="emit('close')">
-            <X />
-          </Button>
-        </div>
-        <div class="max-h-80 overflow-y-auto">
-          <Table>
-            <TableHeader class="sticky top-0 bg-background">
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Compte</TableHead>
-                <TableHead v-if="showCategory">Catégorie</TableHead>
-                <TableHead class="text-right">Montant</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="t in transactions" :key="t._id">
-                <TableCell class="whitespace-nowrap">{{ formatDate(t.date) }}</TableCell>
-                <TableCell class="whitespace-normal">{{ t.description }}</TableCell>
-                <TableCell>{{ t.account?.name }}</TableCell>
-                <TableCell v-if="showCategory">
-                  <span class="flex items-center gap-2">
-                    <CategoryDot :color="t.category && categoryColors.get(t.category._id)" />
-                    {{ t.category?.name ?? 'Sans catégorie' }}
-                  </span>
-                </TableCell>
-                <TableCell class="text-right tabular-nums text-destructive">
-                  {{ formatCents(t.amountCents) }}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    </CollapsibleContent>
-  </Collapsible>
+  <Dialog :open="!!selection" @update:open="(open) => !open && emit('close')">
+    <DialogContent class="sm:max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>{{ shown?.label }}</DialogTitle>
+        <DialogDescription>
+          {{ shown?.transactions.length ?? 0 }} transaction(s) · {{ formatCents(total) }}
+        </DialogDescription>
+      </DialogHeader>
+      <DialogBody>
+        <TransactionList :transactions="shown?.transactions ?? []" />
+      </DialogBody>
+    </DialogContent>
+  </Dialog>
 </template>

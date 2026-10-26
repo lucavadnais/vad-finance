@@ -19,6 +19,7 @@ services:
   # Frontend + backend in a single container, also used as the VS Code dev container
   app:
     build: .
+    image: finance-app
     restart: unless-stopped
     depends_on:
       mongo:

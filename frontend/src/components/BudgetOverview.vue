@@ -56,6 +56,8 @@ export interface BudgetFocus {
   transactionsEmpty?: string;
   // "Non prévu": nothing planned to compare with, the list alone
   listOnly?: boolean;
+  // The monthly buffer: past its amount, what it did not cover
+  buffer?: boolean;
 }
 const selected = defineModel<string | null>('selected', { default: null });
 const focus = defineModel<BudgetFocus | null>('focus', { default: null });
@@ -116,14 +118,10 @@ type CategoryCard = {
 // The buffer's card: its color crossed by faint stripes, a reserve put aside
 const BUFFER_BACKGROUND = `repeating-linear-gradient(135deg, rgb(255 255 255 / 0.07) 0 6px, transparent 6px 14px), ${BUFFER_COLOR}`;
 
-// The buffer covers every overrun of the month: they are shown, not in red
-const covered = computed(() => {
-  const s = section.value.summary;
-  return kind.value === 'expense' && s.bufferCents > 0 && s.extraCents > 0 && s.overrunCents === 0;
-});
-// "Non prévu", unless the buffer covers it: its transactions are then in the
-// buffer's list
-const showUnplanned = computed(() => section.value.unplanned.length > 0 && !covered.value);
+// "Non prévu": with no buffer only (income has none). Spending past the
+// forecasts, or with none, is the buffer's: its card lists those transactions,
+// past its amount if need be
+const showUnplanned = computed(() => section.value.unplanned.length > 0 && section.value.summary.bufferCents === 0);
 // Categories with a forecast, biggest first (the order of lib/budget.ts); the
 // forecasts with no category share one card; then the buffer
 const cards = computed<CategoryCard[]>(() => {
@@ -153,7 +151,8 @@ const cards = computed<CategoryCard[]>(() => {
       buffer: true,
       projections: [],
       plannedCents: s.summary.bufferCents,
-      actualCents: s.summary.bufferUsedCents,
+      // All that went past the forecasts: over its amount, an overrun
+      actualCents: s.summary.extraCents,
     });
   return list;
 });
@@ -216,6 +215,7 @@ watchEffect(() => {
         plannedCents: c.plannedCents,
         actualCents: c.actualCents,
         over: kind.value === 'expense' && c.actualCents > c.plannedCents,
+        buffer: c.buffer,
         // Not "Sans catégorie": its forecasts have no transactions of their own
         transactions: c.buffer
           ? bufferTransactions.value
@@ -393,11 +393,7 @@ function springBack(velocity: number) {
           }}</strong>
           {{ kind === 'expense' ? 'à dépenser pour respecter votre budget.' : 'de revenus prévus à recevoir.' }}
         </template>
-        <template v-else>
-          {{
-            kind === 'expense' ? 'Vous avez atteint votre budget de dépenses.' : 'Tous vos revenus prévus sont arrivés.'
-          }}
-        </template>
+        <template v-else-if="kind === 'expense'"> Vous avez atteint votre budget de dépenses. </template>
       </p>
       <!-- The estimated net, in a sentence: what the month will end with (or
            did, once over) -->
@@ -575,7 +571,7 @@ function springBack(velocity: number) {
         </template>
         <!-- With no forecast: what went out (or came in) anyway, selected like a
            card: its transactions then show below, in place of the chart. Not
-           when the buffer covers it -->
+           with a buffer: they are on its card -->
         <button
           v-if="showUnplanned"
           type="button"

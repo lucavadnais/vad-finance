@@ -3,6 +3,8 @@
 // Next to the title, an icon per kind of pending review (transfers to link,
 // possible duplicates) opens its dialog. `account`: only that account's (the
 // one picked in the accounts' total card), without its logo on each row.
+// `from` and `to` (inclusive): only the transactions of a period (an account's
+// page).
 import type { Account, Category, Transaction } from '@/types';
 import { computed, onMounted, ref, watch } from 'vue';
 import { ChevronLeft, ChevronRight, Copy, Receipt, SearchX, TriangleAlert } from '@lucide/vue';
@@ -37,6 +39,8 @@ const props = defineProps<{
   // Bumped by the parent whenever transactions may have changed
   version: number;
   account?: string;
+  from?: Date | null;
+  to?: Date | null;
 }>();
 const emit = defineEmits<{ changed: []; error: [message: string] }>();
 
@@ -74,7 +78,14 @@ async function load() {
   const id = ++requestId;
   loading.value = true;
   try {
-    const result = await api.getTransactionsPage(page.value, Number(pageSize.value), query.value, props.account);
+    const result = await api.getTransactionsPage(
+      page.value,
+      Number(pageSize.value),
+      query.value,
+      props.account,
+      props.from,
+      props.to,
+    );
     if (id !== requestId) return; // a newer request is on its way
     items.value = result.items;
     total.value = result.total;
@@ -100,7 +111,7 @@ watch(page, () => {
   if (syncingPage) syncingPage = false;
   else load();
 });
-watch([pageSize, query, () => props.account], () => {
+watch([pageSize, query, () => props.account, () => props.from?.getTime(), () => props.to?.getTime()], () => {
   // Back to page 1: the page watcher reloads, unless already there
   if (page.value !== 1) page.value = 1;
   else load();
@@ -127,7 +138,11 @@ const range = computed(() => {
   <Card
     class="max-md:gap-4 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-transparent max-md:pt-6 max-md:pb-0 max-md:shadow-none"
   >
-    <CardHeader class="max-md:px-0">
+    <!-- Phone: the header (and its search) stays stuck at the top while the
+         rows scroll by, under the page's bar if it has one (--sticky-top) -->
+    <CardHeader
+      class="max-md:sticky max-md:top-(--sticky-top,0px) max-md:z-20 max-md:-mx-4 max-md:bg-background/90 max-md:px-4 max-md:py-2 max-md:backdrop-blur"
+    >
       <CardTitle class="flex min-h-8 items-center gap-1">
         Transactions
         <Button
@@ -158,7 +173,8 @@ const range = computed(() => {
       <CardDescription>
         <template v-if="query">{{ total }} résultat(s) pour « {{ query }} ».</template>
         <template v-else-if="accountName"
-          >{{ total }} transaction(s) de {{ accountName }}, les plus récentes en premier.</template
+          >{{ total }} transaction(s) de {{ accountName }}{{ from || to ? ' sur cette période' : '' }}, les plus
+          récentes en premier.</template
         >
         <template v-else>{{ total }} transaction(s), les plus récentes en premier.</template>
       </CardDescription>
@@ -215,7 +231,8 @@ const range = computed(() => {
       />
 
       <div v-if="total > 0" class="flex flex-wrap items-center gap-4">
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+        <!-- Not on a phone: the default page size, the pagination keeps the row -->
+        <div class="flex items-center gap-2 text-sm text-muted-foreground max-md:hidden">
           Lignes par page
           <OptionSelect v-model="pageSize" :options="PAGE_SIZES" class="h-8 w-20" />
         </div>

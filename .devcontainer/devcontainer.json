@@ -1,6 +1,10 @@
 {
   "name": "Finance",
-  "dockerComposeFile": "../docker-compose.yml",
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.yml"],
+  // Build the image on the host with the project Dockerfile, see docker-compose.yml here.
+  // Plain docker build, not compose: compose's bake fails when VS Code opens the
+  // folder with a lowercase drive letter (e:\ instead of E:\)
+  "initializeCommand": "docker build -t finance-app .",
   "service": "app",
   "workspaceFolder": "/workspace",
   "shutdownAction": "stopCompose",

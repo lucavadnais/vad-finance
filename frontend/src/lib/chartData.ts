@@ -14,17 +14,6 @@ export const PERIODS: Record<Period, string> = {
   all: 'Tout',
 };
 
-// The analysis' periods, over several months: this week and one month at a
-// time are the spending tab's
-export type TrendPeriod = Exclude<Period, 'week' | 'month'>;
-export const TREND_PERIODS: Record<TrendPeriod, string> = {
-  '3m': PERIODS['3m'],
-  '6m': PERIODS['6m'],
-  '12m': PERIODS['12m'],
-  year: PERIODS.year,
-  all: PERIODS.all,
-};
-
 export interface Series {
   key: string;
   label: string;

@@ -49,7 +49,7 @@ export function withAlpha(color: string, alpha: number) {
 }
 
 // `amount` < 0 darkens towards black, > 0 lightens towards white
-function tint(hex: string, amount: number) {
+export function tint(hex: string, amount: number) {
   const target = amount < 0 ? 0 : 255;
   return toHex(toRgb(hex).map((v) => v + (target - v) * Math.abs(amount)));
 }

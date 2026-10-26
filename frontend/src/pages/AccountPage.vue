@@ -3,8 +3,10 @@
 // period picked (the spending tab's chart), and where its spending went (the
 // analysis' donut). Editing it stays in the account dialog, from the top right.
 import type { ChartSelection, Period } from '@/lib/chartData';
+import type { ComponentPublicInstance } from 'vue';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useElementSize } from '@vueuse/core';
 import { ChartPie, Pencil } from '@lucide/vue';
 import { formatCents, formatCentsCompact } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
@@ -28,12 +30,13 @@ import TrendChart from '@/components/TrendChart.vue';
 import ExpensesDonut from '@/components/charts/ExpensesDonut.vue';
 import SelectedTransactions from '@/components/charts/SelectedTransactions.vue';
 import PageBar from '@/components/PageBar.vue';
-import TransactionList from '@/components/TransactionList.vue';
+import TransactionsTable from '@/components/TransactionsTable.vue';
 
 const props = defineProps<{ id: string }>();
 
 const router = useRouter();
-const { accounts, categories, categoryGroups, categoryColors, transactions, refresh, setError } = useFinanceData();
+const { accounts, categories, categoryGroups, categoryColors, transactions, dataVersion, refresh, setError } =
+  useFinanceData();
 
 const account = computed(() => accounts.value.find((a) => a._id === props.id));
 // Deleted from its dialog (or a stale address): back home
@@ -97,21 +100,16 @@ const selectedTransactions = computed(() =>
   selectedExpenses(accountTransactions.value, selection.value, expenses.value.keyOf, from.value),
 );
 
-// The account's transactions over the period, newest first, a page at a time
-const PAGE_SIZE = 50;
-const shown = ref(PAGE_SIZE);
-watch([period, month, () => props.id], () => (shown.value = PAGE_SIZE));
-const periodTransactions = computed(() =>
-  accountTransactions.value
-    .filter((t) => !from.value || new Date(t.date) >= from.value)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-);
+// The bar's height (taller with the month's arrows on their own line): the
+// transactions' header sticks right under it on a phone
+const bar = ref<ComponentPublicInstance | null>(null);
+const { height: barHeight } = useElementSize(bar, undefined, { box: 'border-box' });
 </script>
 
 <template>
   <div v-if="account" class="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6">
     <!-- Back, and the period (with its month) -->
-    <PageBar v-model:period="period" v-model:month="month" back :periods="PERIODS" up-to-now @back="back" />
+    <PageBar ref="bar" v-model:period="period" v-model:month="month" back :periods="PERIODS" up-to-now @back="back" />
 
     <section class="flex flex-col gap-4">
       <div class="flex items-center gap-3">
@@ -173,20 +171,18 @@ const periodTransactions = computed(() =>
       </template>
     </section>
 
-    <section class="flex flex-col gap-2 border-t pt-6">
-      <h3 class="text-lg font-semibold">Transactions</h3>
-      <p class="text-sm text-muted-foreground">
-        {{ periodTransactions.length }} transaction(s) sur cette période, les plus récentes en premier.
-      </p>
-      <TransactionList :transactions="periodTransactions.slice(0, shown)" hide-account />
-      <Button
-        v-if="periodTransactions.length > shown"
-        variant="outline"
-        class="self-center"
-        @click="shown += PAGE_SIZE"
-      >
-        Afficher plus
-      </Button>
-    </section>
+    <!-- The home page's list, the account's only, over the period -->
+    <TransactionsTable
+      class="min-w-0"
+      :style="{ '--sticky-top': `${barHeight}px` }"
+      :accounts="accounts"
+      :categories="categories"
+      :version="dataVersion"
+      :account="account._id"
+      :from="from"
+      :to="end && now"
+      @changed="refresh"
+      @error="setError"
+    />
   </div>
 </template>

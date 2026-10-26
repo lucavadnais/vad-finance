@@ -1,22 +1,25 @@
 <script setup lang="ts">
 // Forecasts vs actual for the month shown by the budget card: a plain bar
-// chart, each bar what really came in or went out, topped in a paler shade by
-// what is still planned (spending past its forecast: the forecast and a red
-// bar side by side). The month's income and spending; or, with a card
+// chart, each bar what really came in or went out, part by part (planned,
+// extra; for spending, the buffer used and what it did not cover), topped in
+// a paler shade by what is still pending. The month's income and spending; or, with a card
 // selected above (`focus`), that category alone - its transactions (for the
 // buffer, what drew on it) listed on the left.
 import type { ChartConfig } from '@/components/ui/chart';
 import type { Month } from '@/lib/projections';
 import type { Category, Projection, Transaction } from '@/types';
 import type { BudgetFocus } from '../BudgetOverview.vue';
-import { computed, useTemplateRef } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import { useElementSize } from '@vueuse/core';
+import { ChevronDown } from '@lucide/vue';
 import { VisAxis, VisStackedBar, VisXYContainer } from '@unovis/vue';
 import { amountTickFormat, formatCents } from '@/api';
 import { budget, budgetSection } from '@/lib/budget';
-import { withAlpha } from '@/lib/colors';
+import { BUFFER_COLOR, tint, withAlpha } from '@/lib/colors';
 import { monthLabel } from '@/lib/projections';
+import { Button } from '@/components/ui/button';
 import { ChartContainer } from '@/components/ui/chart';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useFinanceData } from '@/composables/useFinanceData';
 import TransactionList from '../TransactionList.vue';
 
@@ -30,66 +33,117 @@ const selected = defineModel<Month>({ required: true });
 
 const { settings } = useFinanceData();
 
-interface Bar {
+// Each bar stacked from what happened to what is still planned, part by part
+// (named in the tiles, which serve as the legend)
+interface Segment {
+  label: string;
+  cents: number;
+  color: string;
+}
+interface Column {
   label: string;
   color: string;
   plannedCents: number;
   actualCents: number;
+  // Spending past what the forecasts and the buffer cover
   over: boolean;
+  segments: Segment[];
 }
-const bars = computed<Bar[]>(() => {
-  if (props.focus) return [props.focus];
+const PENDING = 'Planifié';
+const INCOME_COLOR = 'var(--color-emerald-600)';
+// Darker than the income's green, apart from the pale pending part
+const EXTRA_INCOME_COLOR = '#065f46';
+const SPENDING_COLOR = 'var(--destructive)';
+const OVERRUN_COLOR = '#7f1d1d';
+const pending = (color: string) => withAlpha(color, 0.25);
+// Income past its forecast: a darker shade of its color, apart from the pale
+// pending part
+const extraColor = (color: string) => (/^#[0-9a-f]{6}$/i.test(color) ? tint(color, -0.4) : color);
+
+const columns = computed<Column[]>(() => {
+  // A selected card: one category, its own forecast; past it, the buffer's
+  // color for spending (what drew on it), a darker shade for income. The
+  // buffer itself: what it covered, then what it did not
+  if (props.focus) {
+    const f = props.focus;
+    return [
+      {
+        ...f,
+        segments: [
+          {
+            label: f.buffer ? 'Marge utilisée' : 'Réalisé',
+            cents: Math.min(f.actualCents, f.plannedCents),
+            color: f.color,
+          },
+          {
+            label: f.buffer ? 'Hors marge' : f.over ? 'Au-delà de la prévision' : 'Extra',
+            cents: Math.max(0, f.actualCents - f.plannedCents),
+            color: f.buffer ? OVERRUN_COLOR : f.over ? BUFFER_COLOR : extraColor(f.color),
+          },
+          { label: PENDING, cents: Math.max(0, f.plannedCents - f.actualCents), color: pending(f.color) },
+        ],
+      },
+    ];
+  }
+  // The month: added up category by category, like the budget card's warning
+  // (lib/budget.ts), so an overrun does not hide behind a bill not charged yet.
+  // Pending: the forecasts not reached yet, those with no category, and for
+  // spending what is left of the buffer
   const b = budget(props.projections, props.transactions, props.categories, selected.value);
-  const income = budgetSection(b.income).total;
-  const expense = budgetSection(b.expense, settings.value.budgetBufferCents).total;
-  const bar = (label: string, color: string, t: typeof income, canGoOver: boolean) => {
-    const actualCents = Math.max(0, t.actualCents);
-    return { label, color, plannedCents: t.plannedCents, actualCents, over: canGoOver && actualCents > t.plannedCents };
-  };
+  const parts = (s: ReturnType<typeof budgetSection>) => ({
+    withinCents: s.compared.reduce((sum, r) => sum + Math.max(0, Math.min(r.actualCents, r.plannedCents)), 0),
+    pendingCents:
+      s.summary.leftCents +
+      s.uncategorized.reduce((sum, r) => sum + r.plannedCents, 0) +
+      s.summary.bufferCents -
+      s.summary.bufferUsedCents,
+  });
+  const income = budgetSection(b.income);
+  const i = parts(income);
+  const expense = budgetSection(b.expense, settings.value.budgetBufferCents);
+  const e = parts(expense);
   return [
-    bar('Revenus', 'var(--color-emerald-600)', income, false),
-    bar('Dépenses', 'var(--brand-night)', expense, true),
+    {
+      label: 'Revenus',
+      color: INCOME_COLOR,
+      plannedCents: income.total.plannedCents,
+      actualCents: Math.max(0, income.total.actualCents),
+      over: false,
+      segments: [
+        { label: 'Prévus', cents: i.withinCents, color: INCOME_COLOR },
+        { label: 'Extra', cents: income.summary.extraCents, color: EXTRA_INCOME_COLOR },
+        { label: PENDING, cents: i.pendingCents, color: pending(INCOME_COLOR) },
+      ],
+    },
+    {
+      label: 'Dépenses',
+      color: SPENDING_COLOR,
+      plannedCents: expense.total.plannedCents,
+      actualCents: Math.max(0, expense.total.actualCents),
+      over: expense.summary.overrunCents > 0,
+      segments: [
+        { label: 'Prévues', cents: e.withinCents, color: SPENDING_COLOR },
+        { label: 'Marge utilisée', cents: expense.summary.bufferUsedCents, color: BUFFER_COLOR },
+        { label: 'Hors marge', cents: expense.summary.overrunCents, color: OVERRUN_COLOR },
+        { label: PENDING, cents: e.pendingCents, color: pending('var(--brand-night)') },
+      ],
+    },
   ];
 });
-const empty = computed(() => bars.value.every((b) => b.plannedCents === 0 && b.actualCents === 0));
-
-// Each bar in two stacked parts: what happened, then what is still planned.
-// Past its forecast, nothing is left to stack: the forecast (pale) and what
-// happened (red) then stand side by side instead.
-interface Column {
-  label: string;
-  color: string;
-  doneCents: number;
-  leftCents: number;
-  over: boolean;
-}
-const columns = computed<Column[]>(() =>
-  bars.value.flatMap((b) => {
-    const prefix = props.focus ? '' : `${b.label} · `;
-    return b.over
-      ? [
-          { label: `${prefix}prévu`, color: b.color, doneCents: 0, leftCents: b.plannedCents, over: false },
-          { label: `${prefix}réalisé`, color: b.color, doneCents: b.actualCents, leftCents: 0, over: true },
-        ]
-      : [
-          {
-            label: b.label,
-            color: b.color,
-            doneCents: b.actualCents,
-            leftCents: Math.max(0, b.plannedCents - b.actualCents),
-            over: false,
-          },
-        ];
-  }),
+const empty = computed(() => columns.value.every((b) => b.plannedCents === 0 && b.actualCents === 0));
+// One accessor per segment, as many as the longest bar has
+const y = computed(() =>
+  Array.from(
+    { length: Math.max(...columns.value.map((c) => c.segments.length)) },
+    (_, i) => (c: Column) => c.segments[i]?.cents ?? 0,
+  ),
 );
-const y = [(c: Column) => c.doneCents, (c: Column) => c.leftCents];
-const color = (c: Column, i: number) =>
-  i === 0 ? (c.over ? 'var(--destructive)' : c.color) : withAlpha(c.color, 0.25);
+const color = (c: Column, i: number) => c.segments[i]?.color ?? 'transparent';
+// Each tile's details (the parts of its bar), folded until asked for: its
+// label, open or not
+const detailsOpen = ref<Record<string, boolean>>({});
 const tickValues = computed(() => columns.value.map((_, i) => i));
-const tickLabel = (i: number) => {
-  const label = columns.value[Math.round(i)]?.label ?? '';
-  return label.charAt(0).toUpperCase() + label.slice(1);
-};
+const tickLabel = (i: number) => columns.value[Math.round(i)]?.label ?? '';
 const config: ChartConfig = {};
 
 // Unovis leaves a gap between bars whatever their padding: each column gets
@@ -147,13 +201,26 @@ const barWidth = computed(() =>
            big, the forecast under it. None for a selected card: its own card
            above says it already -->
         <div v-if="!focus" class="grid shrink-0 grid-cols-2 gap-3 md:w-56 md:grid-cols-1">
-          <div v-for="b in bars" :key="b.label" class="flex flex-col gap-1 rounded-2xl bg-muted/60 p-3">
+          <Collapsible
+            v-for="b in columns"
+            :key="b.label"
+            v-model:open="detailsOpen[b.label]"
+            class="flex flex-col gap-1 rounded-2xl bg-muted/60 p-3"
+          >
             <span class="flex items-center gap-2 text-sm text-muted-foreground">
-              <span
-                class="size-2.5 shrink-0 rounded-full"
-                :style="{ background: b.over ? 'var(--destructive)' : b.color }"
-              />
+              <span class="size-2.5 shrink-0 rounded-full" :style="{ background: b.color }" />
               <span class="truncate">{{ b.label }}</span>
+              <CollapsibleTrigger as-child>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  class="-my-1 -mr-1.5 ml-auto size-6"
+                  :aria-label="detailsOpen[b.label] ? 'Masquer le détail' : 'Voir le détail'"
+                  :title="detailsOpen[b.label] ? 'Masquer le détail' : 'Voir le détail'"
+                >
+                  <ChevronDown class="transition-transform" :class="detailsOpen[b.label] && 'rotate-180'" />
+                </Button>
+              </CollapsibleTrigger>
             </span>
             <span class="truncate text-lg font-semibold tabular-nums" :class="b.over && 'text-destructive'">
               {{ formatCents(b.actualCents) }}
@@ -161,7 +228,17 @@ const barWidth = computed(() =>
             <span class="truncate text-xs text-muted-foreground tabular-nums"
               >sur {{ formatCents(b.plannedCents) }} prévus</span
             >
-          </div>
+            <!-- The legend: each part of its bar, the ones with an amount -->
+            <CollapsibleContent>
+              <ul class="mt-1 flex flex-col gap-0.5 text-xs">
+                <li v-for="p in b.segments.filter((p) => p.cents > 0)" :key="p.label" class="flex items-center gap-1.5">
+                  <span class="size-2 shrink-0 rounded-full" :style="{ background: p.color }" />
+                  <span class="truncate text-muted-foreground">{{ p.label }}</span>
+                  <span class="ml-auto tabular-nums">{{ formatCents(p.cents) }}</span>
+                </li>
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         <!-- Phone: a selected card's chart first, its transactions under it (the
              month's tiles stay above) -->

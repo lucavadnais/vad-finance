@@ -25,6 +25,7 @@ export async function findTransferCandidates(user) {
     user,
     transferPeer: null,
     transferIgnored: { $ne: true },
+    valuation: { $ne: true },
     category: null,
   })
     .populate({ path: 'account', select: 'name', match: { user } })

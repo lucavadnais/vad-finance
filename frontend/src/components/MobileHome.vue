@@ -12,7 +12,7 @@ import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { budget, estimatedMonth } from '@/lib/budget';
-import { recentBalance } from '@/lib/chartData';
+import { inTotal, recentBalance } from '@/lib/chartData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { currentMonth, monthLabel } from '@/lib/projections';
 import { dailySpending, medianRunningTotal, runningTotal, vsUsualPercent } from '@/lib/spending';
@@ -31,7 +31,7 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [tab: HomeTab]; changed: []; error: [message: string] }>();
 
 const { amountsHidden, toggle: toggleAmounts } = useAmountsHidden();
-const totalCents = computed(() => props.accounts.reduce((sum, a) => sum + a.balanceCents, 0));
+const totalCents = computed(() => inTotal(props.accounts).reduce((sum, a) => sum + a.balanceCents, 0));
 
 const { settings } = useFinanceData();
 const month = currentMonth();
@@ -39,7 +39,7 @@ const monthName = monthLabel(month).replace(/ \d+$/, '');
 
 // Under the total, opening the analysis (whose top is the same balance and
 // curve): the total balance over the last 30 days, colored by how it moved
-const recent = computed(() => recentBalance(props.transactions, props.accounts));
+const recent = computed(() => recentBalance(props.transactions, inTotal(props.accounts)));
 const balance = computed(() => recent.value.values);
 const balanceChange = computed(() => recent.value.changeCents);
 
@@ -173,7 +173,9 @@ const netShare = computed(() => {
         <AccountLogo :account="a" />
         <span class="flex min-w-0 flex-col">
           <span class="truncate font-medium">{{ a.name }}</span>
-          <span class="text-sm text-muted-foreground">{{ ACCOUNT_TYPES[a.type] ?? a.type }}</span>
+          <span class="text-sm text-muted-foreground">
+            {{ ACCOUNT_TYPES[a.type] ?? a.type }}{{ a.excludedFromTotal ? ' · hors total' : '' }}
+          </span>
         </span>
         <span class="ml-auto shrink-0 font-medium tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
       </RouterLink>

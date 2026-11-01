@@ -77,8 +77,9 @@ export function budget(
   }
 
   for (const t of transactions) {
-    // Transfers move money between own accounts: neither spent nor earned
-    if (t.transferAccount || !sameMonth(monthOf(t.date), m)) continue;
+    // Transfers move money between own accounts and value updates follow the
+    // market: neither spent nor earned
+    if (t.transferAccount || t.valuation || !sameMonth(monthOf(t.date), m)) continue;
     const category = t.category ? byCategory.get(t.category._id) : undefined;
     // Uncategorized transactions: their sign says expense or income
     const kind: CategoryKind = category?.kind ?? (t.amountCents < 0 ? 'expense' : 'income');

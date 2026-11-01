@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -45,6 +44,11 @@ const linked = computed(() => !!props.transaction?.transferPeer);
 const isTransfer = computed(() => form.value.category === TRANSFER);
 // Undefined for transfers and uncategorized: the typed sign is kept
 const categoryKind = computed(() => props.categories.find((c) => c._id === form.value.category)?.kind);
+// Red for an expense, green for income, as in the lists
+const amountClass = computed(() => {
+  const cents = signedCents(form.value.amount, categoryKind.value);
+  return cents < 0 ? 'text-destructive' : cents > 0 ? 'text-emerald-600' : '';
+});
 const otherAccounts = computed(() => props.accounts.filter((a) => a._id !== form.value.account));
 
 // Every opening starts from the transaction
@@ -118,9 +122,6 @@ function unlink() {
       <form class="flex flex-col gap-4" @submit.prevent="save">
         <DialogHeader>
           <DialogTitle>Modifier la transaction</DialogTitle>
-          <DialogDescription>
-            Avec une catégorie, son type donne le signe : saisissez le montant sans signe.
-          </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
@@ -151,7 +152,7 @@ function unlink() {
             </div>
             <div class="flex flex-col gap-2">
               <Label for="transaction-amount">Montant</Label>
-              <Input id="transaction-amount" v-model="form.amount" inputmode="decimal" class="text-right" />
+              <Input id="transaction-amount" v-model="form.amount" inputmode="decimal" :class="amountClass" />
             </div>
           </div>
           <template v-if="isTransfer">

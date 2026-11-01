@@ -7,7 +7,7 @@ import type { ComponentPublicInstance } from 'vue';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useElementSize } from '@vueuse/core';
-import { ChartPie, Pencil } from '@lucide/vue';
+import { ChartPie, Pencil, TrendingUp } from '@lucide/vue';
 import { formatCents, formatCentsCompact } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
 import {
@@ -25,6 +25,7 @@ import { ACCOUNT_TYPES } from '@/lib/labels';
 import { Button } from '@/components/ui/button';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
+import AccountValueDialog from '@/components/AccountValueDialog.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import TrendChart from '@/components/TrendChart.vue';
 import ExpensesDonut from '@/components/charts/ExpensesDonut.vue';
@@ -118,13 +119,26 @@ const { height: barHeight } = useElementSize(bar, undefined, { box: 'border-box'
           <h2 class="truncate text-lg font-semibold">{{ account.name }}</h2>
           <p class="text-sm text-muted-foreground">{{ ACCOUNT_TYPES[account.type] ?? account.type }}</p>
         </div>
-        <!-- The action on the account's line, top right -->
+        <!-- The actions on the account's line, top right. An investment's value
+             moves with the market: its balance is brought to it by hand. -->
+        <AccountValueDialog v-if="account.type === 'investment'" :account="account" @changed="refresh">
+          <Button
+            variant="ghost"
+            aria-label="Mettre à jour la valeur"
+            title="Mettre à jour la valeur"
+            class="ml-auto max-sm:size-9"
+          >
+            <TrendingUp />
+            <span class="max-sm:sr-only">Valeur</span>
+          </Button>
+        </AccountValueDialog>
         <AccountForm :account="account" :accounts="accounts" @changed="refresh" @error="setError">
           <Button
             variant="ghost"
             aria-label="Modifier le compte"
             title="Modifier le compte"
-            class="ml-auto max-sm:size-9"
+            :class="account.type !== 'investment' && 'ml-auto'"
+            class="max-sm:size-9"
           >
             <Pencil />
             <span class="max-sm:sr-only">Modifier</span>

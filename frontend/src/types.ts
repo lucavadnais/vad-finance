@@ -20,13 +20,15 @@ export interface Account {
   logoUpdatedAt: string | null;
   currency: string;
   initialBalanceCents: number;
+  // Left out of the total of the accounts (see inTotal)
+  excludedFromTotal: boolean;
   balanceCents: number;
   transactionCount: number;
   // Transfer sides the app created: an account with only those was never imported
   autoCreatedCount: number;
 }
 
-export type AccountInput = Pick<Account, 'name' | 'type' | 'initialBalanceCents'>;
+export type AccountInput = Pick<Account, 'name' | 'type' | 'initialBalanceCents' | 'excludedFromTotal'>;
 
 export interface CategoryGroup {
   _id: string;
@@ -61,6 +63,9 @@ export interface Transaction {
   // side, and the linked transaction there
   transferAccount: Pick<Account, '_id' | 'name'> | null;
   transferPeer: string | null;
+  // Gain or loss recorded by a value update (api.updateAccountValue): neither
+  // spent nor earned, like a transfer
+  valuation?: boolean;
 }
 
 // GET /transactions?page=&pageSize=

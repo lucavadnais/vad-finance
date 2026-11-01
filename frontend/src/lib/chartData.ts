@@ -47,8 +47,9 @@ export function periodStart(period: Period, now = new Date()): Date | null {
 }
 
 // Spending = money out, except transfers between own accounts (paying the
-// credit card from the checking account is not an expense: the card purchases are)
-export const isExpense = (t: Transaction) => t.amountCents < 0 && !t.transferAccount;
+// credit card from the checking account is not an expense: the card purchases
+// are) and an investment's loss of value
+export const isExpense = (t: Transaction) => t.amountCents < 0 && !t.transferAccount && !t.valuation;
 
 export interface ExpenseSeries {
   series: Series[];
@@ -193,11 +194,11 @@ export function accountSeries(accounts: Account[]): Series[] {
   return series;
 }
 
+// The accounts counted in the total (balance and its curve)
+export const inTotal = (accounts: Account[]) => accounts.filter((a) => !a.excludedFromTotal);
+
 export const TOTAL_SERIES: Series = { key: 'total', label: 'Total', color: 'var(--series-1)' };
 
-// Balance after each day with transactions, per account and in total. Starts
-// at the balance on the first day of the period (or the day before the first
-// transaction, when there is none before it) and ends today.
 // The total balance over the last `days` days, and how much it moved: the
 // curve under the total of the accounts (the phone's home, the computer's card)
 export function recentBalance(transactions: Transaction[], accounts: Account[], days = 30) {
@@ -206,6 +207,10 @@ export function recentBalance(transactions: Transaction[], accounts: Account[], 
   return { values, changeCents: (values.at(-1) ?? 0) - (values[0] ?? 0) };
 }
 
+// Balance after each day with transactions, per account and in total, for
+// `accounts` only (the transactions of the others are left out). Starts at the
+// balance on the first day of the period (or the day before the first
+// transaction, when there is none before it) and ends today.
 export function balanceOverTime(
   transactions: Transaction[],
   accounts: Account[],
@@ -214,9 +219,11 @@ export function balanceOverTime(
   now = new Date(),
 ): Row[] {
   const keyOf = (accountId: string | undefined) => (series.some((s) => s.key === accountId) ? accountId! : OTHER_KEY);
+  const counted = new Set(accounts.map((a) => a._id));
 
   const balance = new Map<string, number>(series.map((s) => [s.key, 0]));
   const add = (accountId: string | undefined, cents: number) => {
+    if (!accountId || !counted.has(accountId)) return;
     const key = keyOf(accountId);
     if (balance.has(key)) balance.set(key, balance.get(key)! + cents);
   };

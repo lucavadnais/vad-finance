@@ -189,13 +189,14 @@ const barWidth = computed(() =>
         class="flex flex-col gap-3 md:flex-row md:items-center md:gap-6"
       >
         <!-- The selected card's transactions: beside the chart (a category, the
-             buffer), or alone ("Non prévu", nothing planned to chart) -->
+             buffer), or alone ("Non prévu", nothing planned to chart). Their
+             full height on a phone: the page scrolls, not the list -->
         <div
           v-if="focus?.transactions"
-          class="flex shrink-0 flex-col overflow-y-auto"
-          :class="focus.listOnly ? 'max-h-80 w-full' : 'md:max-h-56 md:w-80 md:self-stretch'"
+          class="flex shrink-0 flex-col md:overflow-y-auto"
+          :class="focus.listOnly ? 'w-full md:max-h-80' : 'md:max-h-56 md:w-80 md:self-stretch'"
         >
-          <TransactionList :transactions="focus.transactions" readonly :empty="focus.transactionsEmpty" />
+          <TransactionList :transactions="focus.transactions" :empty="focus.transactionsEmpty" />
         </div>
         <!-- The amounts, one small tile per bar: its color's dot, what happened in
            big, the forecast under it. None for a selected card: its own card

@@ -4,17 +4,15 @@
 // spreads them over other cards: the balance in the accounts' total, the
 // spending by category in the spending card.
 import type { Account, Category, CategoryGroup, Transaction } from '@/types';
-import type { ChartSelection, Granularity, Row } from '@/lib/chartData';
+import type { ChartSelection } from '@/lib/chartData';
 import { computed, ref, watch } from 'vue';
 import type { Month } from '@/lib/projections';
 import {
   PERIODS,
   accountSeries,
   balanceOverTime,
-  bucketStart,
   expenseSeries,
   expensesByMonth,
-  expensesByWeek,
   periodStart,
   selectedExpenses,
 } from '@/lib/chartData';
@@ -24,7 +22,6 @@ import { useTrendPeriod } from '@/composables/useTrendPeriod';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PageBar from '../PageBar.vue';
 import BalanceChart from './BalanceChart.vue';
 import ExpensesChart from './ExpensesChart.vue';
@@ -50,8 +47,6 @@ const now = computed(() => (end.value ? new Date(end.value.getTime() - 1) : new 
 const scoped = computed(() =>
   end.value ? props.transactions.filter((t) => new Date(t.date) < end.value!) : props.transactions,
 );
-// A week or a month: nothing to compare, the share of each category only
-const shareOnly = computed(() => period.value === 'week' || period.value === 'month');
 
 // Count grouped categories under their group (e.g. "Milieu de vie")
 const { categoryColors } = useFinanceData();
@@ -59,33 +54,15 @@ const grouped = ref(false);
 const expenses = computed(() =>
   expenseSeries(scoped.value, props.categories, props.groups, categoryColors.value, grouped.value, from.value),
 );
-// Spending bucketed by week (Monday to Sunday) or month, as picked
-const granularity = ref<Exclude<Granularity, 'day'>>('week');
-const BY = { week: expensesByWeek, month: expensesByMonth };
-const expenseRows = computed(() => BY[granularity.value](scoped.value, expenses.value, from.value, now.value));
+// The donut sums the period's spending: monthly buckets are enough
+const expenseRows = computed(() => expensesByMonth(scoped.value, expenses.value, from.value, now.value));
 
-const DESCRIPTIONS = {
-  week: 'Dépenses de chaque semaine (du lundi au dimanche), par catégorie.',
-  month: 'Dépenses de chaque mois, par catégorie.',
-};
-const BUCKET_LABELS = { week: 'Semaine', month: 'Mois' };
-
-// Clicked bar segment or donut slice, and the expenses behind it
+// Clicked donut slice, and the expenses behind it
 const selection = ref<ChartSelection | null>(null);
-watch([period, month, granularity, grouped], () => (selection.value = null));
+watch([period, month, grouped], () => (selection.value = null));
 const selectedTransactions = computed(() =>
-  selectedExpenses(
-    scoped.value,
-    selection.value,
-    expenses.value.keyOf,
-    from.value,
-    (t, bucket) => bucketStart(t.date, granularity.value) === bucket,
-  ),
+  selectedExpenses(scoped.value, selection.value, expenses.value.keyOf, from.value),
 );
-
-const formatWeekTick = (row: Row) =>
-  new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', day: 'numeric', month: 'short' });
-const TICKS: Partial<Record<Granularity, (row: Row) => string>> = { week: formatWeekTick };
 
 // The total balance after each day (all accounts summed)
 const balance = computed(() =>
@@ -102,14 +79,12 @@ const balance = computed(() =>
     <BalanceChart :rows="balance" />
     <ExpensesChart
       title="Dépenses"
-      :description="DESCRIPTIONS[granularity]"
+      description="Dépenses de chaque mois, par catégorie."
       :rows="expenseRows"
       :series="expenses.series"
-      :bucket-label="BUCKET_LABELS[granularity]"
-      :format-tick="TICKS[granularity]"
+      bucket-label="Mois"
       :selection="selection"
       :selected-transactions="selectedTransactions"
-      :share-only="shareOnly"
       @select="selection = $event"
     >
       <!-- The grouping: for the spending only, so in its section -->
@@ -118,14 +93,6 @@ const balance = computed(() =>
           <Switch id="group-categories" v-model="grouped" />
           <Label for="group-categories" class="font-normal">Regrouper par groupe</Label>
         </div>
-      </template>
-      <template v-if="!shareOnly" #actions>
-        <Tabs v-model="granularity">
-          <TabsList>
-            <TabsTrigger value="week">Semaine</TabsTrigger>
-            <TabsTrigger value="month">Mois</TabsTrigger>
-          </TabsList>
-        </Tabs>
       </template>
     </ExpensesChart>
   </Card>

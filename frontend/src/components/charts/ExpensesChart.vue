@@ -1,23 +1,17 @@
 <script setup lang="ts">
-// Spending per bucket (day, week or month), stacked by category. On a phone,
-// the bars lie down: one row per bucket, from the oldest at the top
-import type { ChartConfig } from '@/components/ui/chart';
+// Spending by category over the period: the share of each one as a donut, or
+// (computer) a table per bucket (week or month)
 import type { ChartSelection, Row, Series } from '@/lib/chartData';
 import type { Transaction } from '@/types';
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
-import { ChartColumn, ChartPie, Table2 } from '@lucide/vue';
-import { Direction, Orientation, StackedBar } from '@unovis/ts';
-import { VisAxis, VisStackedBar, VisTooltip, VisXYContainer } from '@unovis/vue';
-import { amountTickFormat } from '@/api';
+import { ChartPie } from '@lucide/vue';
 import { CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer, ChartLegendContent } from '@/components/ui/chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import EmptyState from '../EmptyState.vue';
 import ExpensesDonut from './ExpensesDonut.vue';
 import SelectedTransactions from './SelectedTransactions.vue';
 import SeriesTable from './SeriesTable.vue';
-import { tooltipTemplate } from './tooltip';
 
 const props = defineProps<{
   title: string;
@@ -25,68 +19,30 @@ const props = defineProps<{
   rows: Row[];
   series: Series[];
   bucketLabel: string;
-  // Short axis label for a bucket (defaults to the row label)
-  formatTick?: (row: Row) => string;
-  // The clicked segment and its transactions, shown in a dialog
+  // The clicked slice and its transactions, shown in a dialog
   selection: ChartSelection | null;
   selectedTransactions: Transaction[];
-  // The share only, no views to pick (a single month: no bars to compare)
+  // The share only, no views to pick (a single month: no buckets to compare)
   shareOnly?: boolean;
   // Written when there is no spending (e.g. a month to come)
   emptyMessage?: string;
 }>();
 const emit = defineEmits<{ select: [selection: ChartSelection | null] }>();
 
-// The share of each category first: the most telling view of a period
-const view = ref<'chart' | 'share' | 'table'>('share');
+// The share of each category first: the most telling view of a period. A
+// phone has no table, the share only
+const phone = useMediaQuery('(max-width: 767px)');
+const view = ref<'share' | 'table'>('share');
 watch(
-  () => props.shareOnly,
+  () => props.shareOnly || phone.value,
   (only) => only && (view.value = 'share'),
 );
 
-const config = computed<ChartConfig>(() =>
-  Object.fromEntries(props.series.map((s) => [s.key, { label: s.label, color: s.color }])),
-);
-
-const y = computed(() => props.series.map((s) => (d: Row) => Number(d[s.key] ?? 0)));
-const color = (_: Row, i: number) => props.series[i]?.color;
-const phone = useMediaQuery('(max-width: 767px)');
-// Phone: a row's height for each bar, so the chart grows with them
-const ROW_HEIGHT = 28;
-const height = computed(() => (phone.value ? Math.max(160, props.rows.length * ROW_HEIGHT + 32) : undefined));
-
-// At most ~12 labels on the axis, evenly spaced; every one on a phone, a row each
-const tickValues = computed(() => {
-  const every = phone.value ? 1 : Math.ceil(props.rows.length / 12);
-  return props.rows.map((_, i) => i).filter((i) => i % every === 0);
-});
-// Half a bar slot on each side, so the first and last bars are not cut by the edges
-const bucketDomain = computed<[number, number]>(() => [-0.5, props.rows.length - 0.5]);
-const tickLabel = (i: number) => {
-  const row = props.rows[Math.round(i)];
-  return row ? (props.formatTick?.(row) ?? row.label) : '';
-};
-
-const triggers = {
-  [StackedBar.selectors.bar]: tooltipTemplate(() => config.value, { hideZero: true, showTotal: true }),
-};
-
-// Clicking the same segment again closes the list
+// Clicking the same slice again closes the list
 function select(selection: ChartSelection) {
-  const same = props.selection?.bucket === selection.bucket && props.selection?.keys.join() === selection.keys.join();
+  const same = props.selection?.keys.join() === selection.keys.join();
   emit('select', same ? null : selection);
 }
-
-// Unovis hands the bar's row merged with its stack index
-const barEvents = {
-  [StackedBar.selectors.bar]: {
-    click: (d: Record<string, unknown>) => {
-      const row = (d.datum ?? d) as Row & { stackIndex?: number };
-      const s = props.series[Number(d.stackIndex ?? row.stackIndex)];
-      if (s) select({ keys: [s.key], label: `${s.label} · ${row.label}`, bucket: Number(row.t) });
-    },
-  },
-};
 </script>
 
 <template>
@@ -98,15 +54,13 @@ const barEvents = {
       <CardHeader class="max-md:px-0">
         <div>
           <CardTitle>{{ title }}</CardTitle>
-          <!-- The parent's description is about the bars and the table (by week,
-               month...); the donut is the whole period -->
+          <!-- The parent's description is about the table (by week, month...);
+               the donut is the whole period -->
           <CardDescription>
             {{ view === 'share' ? 'Part de chaque catégorie dans les dépenses de la période.' : description }}
           </CardDescription>
         </div>
-        <!-- Beside the title on a computer. Under it on a phone: the options
-             on their own line, then the week / month choice at the start of
-             the next one, the views at the end -->
+        <!-- Beside the title on a computer, under it on a phone -->
         <CardAction
           stack
           class="flex flex-wrap items-center gap-x-4 gap-y-2 max-md:w-full max-md:justify-between @md/card-header:md:justify-end @max-md/card-header:w-full @max-md/card-header:justify-between"
@@ -116,22 +70,12 @@ const barEvents = {
             <slot name="filters" />
           </div>
           <!-- Extra controls from the parent (the week / month choice): they
-               shape the bars and the table, not the share of the period -->
+               shape the table, not the share of the period -->
           <slot v-if="view !== 'share'" name="actions" />
-          <!-- Icons only on a phone, so the controls fit on one line; no table there -->
-          <TabsList v-if="!shareOnly" class="ml-auto">
-            <TabsTrigger value="share" aria-label="Répartition" title="Répartition">
-              <ChartPie class="md:hidden" />
-              <span class="max-md:sr-only">Répartition</span>
-            </TabsTrigger>
-            <TabsTrigger value="chart" aria-label="Graphique" title="Graphique">
-              <ChartColumn class="md:hidden" />
-              <span class="max-md:sr-only">Graphique</span>
-            </TabsTrigger>
-            <TabsTrigger value="table" aria-label="Tableau" title="Tableau" class="max-md:hidden">
-              <Table2 class="md:hidden" />
-              <span class="max-md:sr-only">Tableau</span>
-            </TabsTrigger>
+          <!-- No table on a phone, so no views to pick there -->
+          <TabsList v-if="!shareOnly" class="ml-auto max-md:hidden">
+            <TabsTrigger value="share">Répartition</TabsTrigger>
+            <TabsTrigger value="table">Tableau</TabsTrigger>
           </TabsList>
         </CardAction>
       </CardHeader>
@@ -142,52 +86,6 @@ const barEvents = {
           :title="emptyMessage ?? 'Aucune dépense sur cette période'"
         />
         <template v-else>
-          <TabsContent value="chart">
-            <ChartContainer
-              :config="config"
-              class="mt-2 aspect-auto h-auto"
-              :class="!phone && '[&_[data-vis-xy-container]]:h-74'"
-            >
-              <!-- The buckets on the bars' axis: across on a computer, down on a phone -->
-              <VisXYContainer
-                :data="rows"
-                :height="height"
-                :x-domain="phone ? undefined : bucketDomain"
-                :y-domain="phone ? bucketDomain : undefined"
-                :y-direction="phone ? Direction.South : Direction.North"
-                :margin="{ left: 8, right: 8 }"
-              >
-                <VisStackedBar
-                  :x="(_: Row, i: number) => i"
-                  :y="y"
-                  :color="color"
-                  :orientation="phone ? Orientation.Horizontal : Orientation.Vertical"
-                  :bar-max-width="phone ? 18 : 24"
-                  :rounded-corners="4"
-                  :bar-padding="0.2"
-                  :events="barEvents"
-                />
-                <VisAxis
-                  :type="phone ? 'y' : 'x'"
-                  :tick-format="tickLabel"
-                  :tick-values="tickValues"
-                  :grid-line="false"
-                  :domain-line="true"
-                  :tick-line="false"
-                />
-                <VisAxis
-                  :type="phone ? 'x' : 'y'"
-                  :tick-format="amountTickFormat"
-                  :num-ticks="phone ? 3 : 4"
-                  :grid-line="true"
-                  :domain-line="false"
-                  :tick-line="false"
-                />
-                <VisTooltip :triggers="triggers" />
-              </VisXYContainer>
-              <ChartLegendContent />
-            </ChartContainer>
-          </TabsContent>
           <TabsContent value="share">
             <ExpensesDonut :rows="rows" :series="series" @select="select" />
           </TabsContent>
@@ -195,7 +93,7 @@ const barEvents = {
             <SeriesTable :rows="rows" :series="series" :bucket-label="bucketLabel" show-total />
           </TabsContent>
         </template>
-        <!-- The clicked segment's transactions: the chart and share views, not the table -->
+        <!-- The clicked slice's transactions: the share view, not the table -->
         <SelectedTransactions
           v-if="view !== 'table'"
           :selection="selection"

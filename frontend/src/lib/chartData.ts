@@ -104,17 +104,6 @@ function monthBucket(d: Date): Bucket {
   return { key: String(t), label, t };
 }
 
-function dayBucket(d: Date): Bucket {
-  const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  const label = new Date(t).toLocaleDateString('fr-CA', {
-    timeZone: 'UTC',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-  });
-  return { key: String(t), label, t };
-}
-
 // Weeks start on Monday
 function weekBucket(d: Date): Bucket {
   const day = (d.getUTCDay() + 6) % 7;
@@ -167,50 +156,30 @@ function expensesBy(
   return [...rows.values()];
 }
 
-export type Granularity = 'day' | 'week' | 'month';
-
-// A clicked bar segment or donut slice: the series it stands for (several for
-// a merged "Autres") and, for a bar, the day, week or month it covers
+// A clicked donut slice: the series it stands for (several for a merged
+// "Autres")
 export interface ChartSelection {
   keys: string[];
   label: string;
-  bucket?: number;
 }
 
-// The expenses behind a clicked bar segment or donut slice, newest first: of
-// its series (`keyOf`), since `from`, and in its bar when it has one
-// (`inBucket`, for the bars' week or month)
+// The expenses behind a clicked donut slice, newest first: of its series
+// (`keyOf`), since `from`
 export function selectedExpenses(
   transactions: Transaction[],
   selection: ChartSelection | null,
   keyOf: (t: Transaction) => string,
   from: Date | null,
-  inBucket?: (t: Transaction, bucket: number) => boolean,
 ): Transaction[] {
   if (!selection) return [];
   const keys = new Set(selection.keys);
-  const bucket = selection.bucket;
   return transactions
-    .filter(
-      (t) =>
-        isExpense(t) &&
-        (!from || new Date(t.date) >= from) &&
-        keys.has(keyOf(t)) &&
-        (bucket === undefined || !inBucket || inBucket(t, bucket)),
-    )
+    .filter((t) => isExpense(t) && (!from || new Date(t.date) >= from) && keys.has(keyOf(t)))
     .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
 }
 
-const BUCKETS = { day: dayBucket, week: weekBucket, month: monthBucket };
-
-// Start (UTC ms) of the day, week or month a date falls in: the `t` of its row
-export const bucketStart = (date: string | Date, granularity: Granularity) => BUCKETS[granularity](new Date(date)).t;
-
 export const expensesByMonth = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
   expensesBy(monthBucket, (b) => addMonths(b, 1), tx, s, from, now);
-
-export const expensesByDay = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
-  expensesBy(dayBucket, (b) => addDays(b, 1), tx, s, from, now);
 
 export const expensesByWeek = (tx: Transaction[], s: ExpenseSeries, from: Date | null, now = new Date()) =>
   expensesBy(weekBucket, (b) => addDays(b, 7), tx, s, from, now);
@@ -227,7 +196,8 @@ export function accountSeries(accounts: Account[]): Series[] {
 export const TOTAL_SERIES: Series = { key: 'total', label: 'Total', color: 'var(--series-1)' };
 
 // Balance after each day with transactions, per account and in total. Starts
-// at the balance on the first day of the period and ends today.
+// at the balance on the first day of the period (or the day before the first
+// transaction, when there is none before it) and ends today.
 // The total balance over the last `days` days, and how much it moved: the
 // curve under the total of the accounts (the phone's home, the computer's card)
 export function recentBalance(transactions: Transaction[], accounts: Account[], days = 30) {
@@ -261,12 +231,16 @@ export function balanceOverTime(
 
   const rows: Row[] = [];
   let i = 0;
-  // Everything before the period only sets the starting balance
+  // Everything before the period only sets the starting balance. Without
+  // anything before it (history imported later than the period's start), the
+  // curve starts the day before the first transaction rather than drawing the
+  // initial balance flat over days with no data
   if (from) {
     for (; i < sorted.length && Date.parse(sorted[i].date) < from.getTime(); i++) {
       add(sorted[i].account?._id, sorted[i].amountCents);
     }
-    rows.push(snapshot(from.getTime()));
+    const start = i === 0 && sorted.length > 0 ? Date.parse(sorted[0].date) - 86_400_000 : from.getTime();
+    rows.push(snapshot(Math.max(start, from.getTime())));
   }
   for (; i < sorted.length; i++) {
     const t = Date.parse(sorted[i].date);

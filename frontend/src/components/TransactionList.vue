@@ -12,12 +12,10 @@ import EmptyState from './EmptyState.vue';
 import TransactionEditDialog from './TransactionEditDialog.vue';
 import TransactionRow from './TransactionRow.vue';
 
-// hideAccount: one account's transactions, its logo on each row says nothing.
-// readonly: for reference, no actions menu (nor edit popup)
-withDefaults(
-  defineProps<{ transactions: Transaction[]; hideAccount?: boolean; readonly?: boolean; empty?: string }>(),
-  { empty: 'Aucune transaction' },
-);
+// hideAccount: one account's transactions, its logo on each row says nothing
+withDefaults(defineProps<{ transactions: Transaction[]; hideAccount?: boolean; empty?: string }>(), {
+  empty: 'Aucune transaction',
+});
 
 const { accounts, categories, refresh, setError } = useFinanceData();
 
@@ -41,7 +39,6 @@ function edit(t: Transaction) {
           :key="t._id"
           :transaction="t"
           :hide-account="hideAccount"
-          :readonly="readonly"
           @edit="edit(t)"
           @changed="refresh"
           @error="setError"
@@ -50,7 +47,6 @@ function edit(t: Transaction) {
     </Table>
   </div>
   <TransactionEditDialog
-    v-if="!readonly"
     v-model:open="editOpen"
     :transaction="editing"
     :accounts="accounts"

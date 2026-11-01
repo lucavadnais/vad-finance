@@ -18,8 +18,8 @@ import CategoryDot from './CategoryDot.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 
 // hideAccount: in a list of one account's transactions, its logo on each row
-// says nothing. readonly: shown for reference, without the actions menu
-const props = defineProps<{ transaction: Transaction; hideAccount?: boolean; readonly?: boolean }>();
+// says nothing
+const props = defineProps<{ transaction: Transaction; hideAccount?: boolean }>();
 const emit = defineEmits<{ edit: []; changed: []; error: [message: string] }>();
 
 const { categoryColors } = useFinanceData();
@@ -83,7 +83,7 @@ async function remove() {
     >
       {{ formatCents(transaction.amountCents) }}
     </TableCell>
-    <TableCell v-if="!readonly" class="w-px pl-0 text-right">
+    <TableCell class="w-px pl-0 text-right">
       <ActionMenu
         :title="transaction.description"
         :description="`${formatDate(transaction.date)} · ${formatCents(transaction.amountCents)}`"

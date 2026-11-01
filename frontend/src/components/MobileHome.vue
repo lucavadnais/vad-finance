@@ -7,7 +7,7 @@
 import type { Account, Category, Projection, Transaction } from '@/types';
 import type { HomeTab } from './MobileTabBar.vue';
 import { computed } from 'vue';
-import { ChevronRight, Eye, EyeOff, Plus } from '@lucide/vue';
+import { Eye, EyeOff, Plus } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
@@ -38,7 +38,7 @@ const month = currentMonth();
 const monthName = monthLabel(month).replace(/ \d+$/, '');
 
 // Under the total, opening the analysis (whose top is the same balance and
-// curve): the total balance over the last 30 days, and how much it moved
+// curve): the total balance over the last 30 days, colored by how it moved
 const recent = computed(() => recentBalance(props.transactions, props.accounts));
 const balance = computed(() => recent.value.values);
 const balanceChange = computed(() => recent.value.changeCents);
@@ -103,15 +103,8 @@ const netShare = computed(() => {
           <Eye v-else />
         </Button>
       </p>
-      <!-- How much the total moved over the curve's 30 days -->
-      <p class="flex flex-wrap items-center justify-center gap-x-1.5 text-sm font-medium text-muted-foreground">
-        <span class="tabular-nums" :class="balanceChange < 0 ? 'text-destructive' : 'text-emerald-600'">
-          {{ balanceChange > 0 && !amountsHidden ? '+' : '' }}{{ formatCents(balanceChange) }}
-        </span>
-        sur 30 jours
-        <ChevronRight class="-ml-0.5 size-4" />
-      </p>
-      <!-- Same color as the change; edge to edge, out of the page's side padding -->
+      <!-- Green if the total rose over the 30 days, red if it fell; edge to
+           edge, out of the page's side padding -->
       <Sparkline
         :values="balance"
         :color="balanceChange < 0 ? 'var(--destructive)' : 'var(--color-emerald-600)'"

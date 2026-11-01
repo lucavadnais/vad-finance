@@ -19,10 +19,9 @@ import { useFinanceData } from '@/composables/useFinanceData';
 import { useSelectedAccount } from '@/composables/useSelectedAccount';
 import { useSelectedPeriod } from '@/composables/useSelectedMonth';
 import { budget, budgetSection } from '@/lib/budget';
-import type { ChartSelection, Period, Row } from '@/lib/chartData';
+import type { ChartSelection, Period } from '@/lib/chartData';
 import {
   PERIODS,
-  bucketStart,
   expenseSeries,
   expensesByMonth,
   expensesByWeek,
@@ -172,8 +171,6 @@ const DESCRIPTIONS = {
   month: 'Dépenses de chaque mois, par catégorie.',
 };
 const BUCKET_LABELS = { week: 'Semaine', month: 'Mois' };
-const formatWeekTick = (row: Row) =>
-  new Date(row.t).toLocaleDateString('fr-CA', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 
 // The month: from its first day to its last (today for the current one)
 const monthStart = computed(() => new Date(Date.UTC(month.value.year, month.value.month, 1)));
@@ -207,17 +204,11 @@ const byCategoryRows = computed(() => {
     isCurrent.value ? new Date() : new Date(monthEnd.value.getTime() - 1),
   );
 });
-// Clicked slice or bar segment, and the expenses behind it
+// Clicked slice, and the expenses behind it
 const selection = ref<ChartSelection | null>(null);
 watch([month, grouped, scope, account], () => (selection.value = null));
 const selectedTransactions = computed(() =>
-  selectedExpenses(
-    scopeTransactions.value,
-    selection.value,
-    byCategory.value.keyOf,
-    from.value,
-    (t, bucket) => bucketStart(t.date, granularity.value) === bucket,
-  ),
+  selectedExpenses(scopeTransactions.value, selection.value, byCategory.value.keyOf, from.value),
 );
 
 // The chart: from day 0 (start of the month, nothing spent) to the last day,
@@ -339,7 +330,6 @@ const dayLabels = computed(() =>
         :rows="byCategoryRows"
         :series="byCategory.series"
         :bucket-label="BUCKET_LABELS[granularity]"
-        :format-tick="granularity === 'week' ? formatWeekTick : undefined"
         :selection="selection"
         :selected-transactions="selectedTransactions"
         :share-only="scope === 'month' || scope === 'week'"

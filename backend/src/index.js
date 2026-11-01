@@ -3,7 +3,6 @@ import path from 'node:path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import { connectDb } from './db.js';
-import Category from './models/Category.js';
 import { requireAuth } from './lib/auth.js';
 import authRouter from './routes/auth.js';
 import accountsRouter from './routes/accounts.js';
@@ -88,9 +87,4 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 3000;
 
 await connectDb(process.env.MONGO_URL);
-// Mongoose creates the indexes a schema declares, but never drops the ones it
-// no longer does: the categories' old unique { user, name } would still refuse
-// an expense and an income of the same name. Does nothing once in line.
-// TODO: remove (and the Category import) once production has started with it
-await Category.syncIndexes();
 app.listen(port, () => console.log(`API listening on port ${port}`));

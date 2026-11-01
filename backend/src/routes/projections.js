@@ -19,7 +19,7 @@ router.post('/', async (req, res) => {
 // left over from a repeating one is cleared too
 router.put('/:id', async (req, res) => {
   const projection = await Projection.findOne({ _id: req.params.id, user: req.userId });
-  if (!projection) return res.status(404).json({ error: 'Projection not found' });
+  if (!projection) return res.status(404).json({ error: 'Prévision introuvable' });
   const {
     name,
     kind,
@@ -38,7 +38,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const projection = await Projection.findOneAndDelete({ _id: req.params.id, user: req.userId });
-  if (!projection) return res.status(404).json({ error: 'Projection not found' });
+  if (!projection) return res.status(404).json({ error: 'Prévision introuvable' });
   res.status(204).end();
 });
 

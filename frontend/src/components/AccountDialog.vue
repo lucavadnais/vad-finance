@@ -33,16 +33,21 @@ const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportS
 const accountId = ref<string | undefined>(props.accounts.length === 1 ? props.accounts[0]._id : undefined);
 const account = computed(() => props.accounts.find((a) => a._id === accountId.value));
 
-// Our category named like the bank's one, ignoring case and accents
+// Our category named like the bank's one, ignoring case and accents, of the
+// row's kind (an expense and an income may share a name)
 // Archived categories are not picked for new transactions
-const categoryByName = new Map(props.categories.filter((c) => !c.archived).map((c) => [normalizeText(c.name), c._id]));
+const nameKey = (kind: Category['kind'], name: string) => `${kind}:${normalizeText(name)}`;
+const categoryByName = new Map(
+  props.categories.filter((c) => !c.archived).map((c) => [nameKey(c.kind, c.name), c._id]),
+);
 
 // Editable copy of the parsed rows. `category` may be TRANSFER: the row is then
 // a transfer to or from `transferAccount`
 const rows = ref(
   props.result.transactions.map((t) => ({
     ...t,
-    category: (t.bankCategory && categoryByName.get(normalizeText(t.bankCategory))) || null,
+    category:
+      (t.bankCategory && categoryByName.get(nameKey(t.amountCents < 0 ? 'expense' : 'income', t.bankCategory))) || null,
     transferAccount: undefined as string | undefined,
   })),
 );
@@ -63,16 +68,18 @@ const duplicates = ref(new Map<number, DuplicateMatch>());
 const selected = ref<boolean[]>(rows.value.map(() => true));
 const checking = ref(false);
 
+// On the id, not the account: a refresh (a category created from a row) brings
+// new account objects, and must not reset the checkboxes
 watch(
-  account,
-  async (acc) => {
+  accountId,
+  async (id) => {
     duplicates.value = new Map();
     selected.value = rows.value.map(() => true);
-    if (!acc) return;
+    if (!id) return;
     checking.value = true;
     try {
-      const matches = await api.checkDuplicates(acc._id, props.result.transactions);
-      if (account.value?._id !== acc._id) return; // account changed meanwhile
+      const matches = await api.checkDuplicates(id, props.result.transactions);
+      if (accountId.value !== id) return; // account changed meanwhile
       duplicates.value = new Map(matches.map((m) => [m.index, m]));
       selected.value = rows.value.map((_, i) => duplicates.value.get(i)?.kind !== 'exact');
     } catch (err) {
@@ -90,7 +97,9 @@ const selectedCount = computed(() => selected.value.filter(Boolean).length);
 // its balance today, as the bank shows it, after the statement's last
 // transaction. The server sets the initial balance so that the account ends up
 // at that balance. Left empty, the initial balance stays as it is.
-const firstImport = computed(() => !!account.value && account.value.transactionCount === account.value.autoCreatedCount);
+const firstImport = computed(
+  () => !!account.value && account.value.transactionCount === account.value.autoCreatedCount,
+);
 const currentBalance = ref('');
 // "Importer" was clicked with no balance: warned once, the next click imports
 const balanceWarned = ref(false);

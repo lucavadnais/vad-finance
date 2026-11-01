@@ -19,7 +19,9 @@ const categorySchema = new mongoose.Schema(
 );
 
 categorySchema.plugin(ownedPlugin);
-// Unique per user: two users can each have their « Épicerie »
-categorySchema.index({ user: 1, name: 1 }, { unique: true });
+// Unique per user and kind: two users can each have their « Épicerie », and a
+// user can have « Remboursement » both as an expense and as an income
+// (index.js brings the database's indexes in line at startup)
+categorySchema.index({ user: 1, kind: 1, name: 1 }, { unique: true });
 
 export default mongoose.model('Category', categorySchema);

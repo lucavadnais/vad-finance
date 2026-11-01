@@ -28,6 +28,14 @@ const QUERIES = [
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
+// Shown to the user by checkOwned's 404
+const NOT_FOUND = {
+  Account: 'Compte introuvable',
+  Category: 'Catégorie introuvable',
+  CategoryGroup: 'Groupe introuvable',
+  Transaction: 'Transaction introuvable',
+};
+
 export function ownedPlugin(schema) {
   schema.add({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, immutable: true, index: true },
@@ -52,6 +60,6 @@ export function ownedPlugin(schema) {
     const wanted = [...new Set(ids.flat().filter(Boolean).map(String))];
     if (wanted.length === 0) return;
     const found = await this.countDocuments({ user, _id: { $in: wanted } });
-    if (found !== wanted.length) throw httpError(404, `${this.modelName} not found`);
+    if (found !== wanted.length) throw httpError(404, NOT_FOUND[this.modelName] ?? 'Élément introuvable');
   };
 }

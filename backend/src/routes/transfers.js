@@ -35,7 +35,7 @@ router.post('/ignore', async (req, res) => {
 
 router.delete('/link/:id', async (req, res) => {
   const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
-  if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+  if (!transaction) return res.status(404).json({ error: 'Transaction introuvable' });
   await unlinkTransfer(transaction);
   res.status(204).end();
 });

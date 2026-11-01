@@ -67,7 +67,7 @@ export async function linkTransfer(user, idA, idB) {
     Transaction.findOne({ _id: idA, user }),
     Transaction.findOne({ _id: idB, user }),
   ]);
-  if (!a || !b) throw httpError(404, 'Transaction not found');
+  if (!a || !b) throw httpError(404, 'Transaction introuvable');
   if (a.amountCents !== -b.amountCents || a.amountCents === 0) {
     throw httpError(400, 'Les montants doivent être opposés');
   }

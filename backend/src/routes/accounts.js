@@ -62,7 +62,7 @@ router.put('/:id', async (req, res) => {
     new: true,
     runValidators: true,
   });
-  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (!account) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(account);
 });
 
@@ -80,7 +80,7 @@ router.put('/:id/logo', express.raw({ type: () => true, limit: LOGO_MAX_BYTES })
     { logo: { data: req.body, contentType }, logoUpdatedAt: new Date() },
     { new: true },
   );
-  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (!account) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(account);
 });
 
@@ -90,14 +90,14 @@ router.delete('/:id/logo', async (req, res) => {
     { $unset: { logo: 1 }, logoUpdatedAt: null },
     { new: true },
   );
-  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (!account) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(account);
 });
 
 // The URL carries ?v=<logoUpdatedAt>, so the image can be cached for good
 router.get('/:id/logo', async (req, res) => {
   const account = await Account.findOne({ _id: req.params.id, user: req.userId }).select('+logo');
-  if (!account?.logo?.data) return res.status(404).json({ error: 'Logo not found' });
+  if (!account?.logo?.data) return res.status(404).json({ error: 'Logo introuvable' });
   res.set({
     'Content-Type': account.logo.contentType,
     'Cache-Control': 'private, max-age=31536000, immutable',
@@ -117,7 +117,7 @@ router.post('/:id/valuation', async (req, res) => {
   }
   const user = req.userId;
   const account = await Account.findOne({ _id: req.params.id, user });
-  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (!account) return res.status(404).json({ error: 'Compte introuvable' });
 
   const day = new Date(date);
   const [sum] = await Transaction.aggregate([
@@ -173,7 +173,7 @@ async function moveTransactions(from, to) {
 router.delete('/:id', async (req, res) => {
   const user = req.userId;
   const account = await Account.findOne({ _id: req.params.id, user });
-  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (!account) return res.status(404).json({ error: 'Compte introuvable' });
 
   if (req.query.moveTo) {
     const target = await Account.findOne({ _id: req.query.moveTo, user });

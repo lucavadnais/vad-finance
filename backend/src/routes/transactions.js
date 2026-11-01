@@ -65,7 +65,7 @@ router.post('/import', async (req, res) => {
   }
   const user = req.userId;
   const account = await Account.findOne({ _id: accountId, user });
-  if (!account) return res.status(404).json({ error: 'Account not found' });
+  if (!account) return res.status(404).json({ error: 'Compte introuvable' });
   if (transactions.some((t) => t.transferAccount && String(t.transferAccount) === String(account._id))) {
     return res.status(400).json({ error: "Un transfert doit aller vers un autre compte" });
   }
@@ -213,14 +213,14 @@ router.put('/:id', async (req, res) => {
     await editable(req.userId, req.body),
     { new: true, runValidators: true },
   );
-  if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+  if (!transaction) return res.status(404).json({ error: 'Transaction introuvable' });
   await syncTransferAfterUpdate(transaction);
   res.json(transaction);
 });
 
 router.delete('/:id', async (req, res) => {
   const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
-  if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
+  if (!transaction) return res.status(404).json({ error: 'Transaction introuvable' });
   await deleteTransaction(transaction);
   res.status(204).end();
 });

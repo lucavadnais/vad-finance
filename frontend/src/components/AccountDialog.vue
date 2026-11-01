@@ -28,8 +28,7 @@ import CategorySelect, { TRANSFER } from './CategorySelect.vue';
 import ParseErrors from './ParseErrors.vue';
 
 const props = defineProps<{ accounts: Account[]; categories: Category[]; result: ParsedCsv }>();
-// `warning`: imported, but something after it failed (the initial balance)
-const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportSummary, warning?: string] }>();
+const emit = defineEmits<{ cancel: []; done: [account: Account, summary: ImportSummary] }>();
 
 const accountId = ref<string | undefined>(props.accounts.length === 1 ? props.accounts[0]._id : undefined);
 const account = computed(() => props.accounts.find((a) => a._id === accountId.value));
@@ -87,10 +86,11 @@ watch(
 
 const selectedCount = computed(() => selected.value.filter(Boolean).length);
 
-// First import into the account: its balance today, as the bank shows it,
-// after the statement's last transaction. Initial balance = that balance
-// minus what is imported. Left empty, the initial balance stays as it is.
-const firstImport = computed(() => account.value?.transactionCount === 0);
+// First import into the account (it may hold transfer sides the app created):
+// its balance today, as the bank shows it, after the statement's last
+// transaction. The server sets the initial balance so that the account ends up
+// at that balance. Left empty, the initial balance stays as it is.
+const firstImport = computed(() => !!account.value && account.value.transactionCount === account.value.autoCreatedCount);
 const currentBalance = ref('');
 // "Importer" was clicked with no balance: warned once, the next click imports
 const balanceWarned = ref(false);
@@ -98,14 +98,9 @@ watch(accountId, () => {
   currentBalance.value = '';
   balanceWarned.value = false;
 });
-const importedCents = computed(() =>
-  rows.value.reduce((sum, r, i) => (selected.value[i] ? sum + r.amountCents : sum), 0),
+const currentCents = computed(() =>
+  firstImport.value && currentBalance.value.trim() ? toCents(currentBalance.value) : null,
 );
-const initialCents = computed(() => {
-  if (!firstImport.value || !currentBalance.value.trim()) return null;
-  const cents = toCents(currentBalance.value);
-  return Number.isNaN(cents) ? NaN : cents - importedCents.value;
-});
 const exactCount = computed(() => [...duplicates.value.values()].filter((d) => d.kind === 'exact').length);
 const possibleCount = computed(() => duplicates.value.size - exactCount.value);
 
@@ -121,11 +116,11 @@ async function submit() {
     error.value = "Choisissez l'autre compte de chaque transfert";
     return;
   }
-  if (Number.isNaN(initialCents.value)) {
+  if (Number.isNaN(currentCents.value)) {
     error.value = 'Solde invalide';
     return;
   }
-  if (firstImport.value && initialCents.value === null && !balanceWarned.value) {
+  if (firstImport.value && currentCents.value === null && !balanceWarned.value) {
     balanceWarned.value = true;
     document.getElementById('import-current-balance')?.focus();
     return;
@@ -144,21 +139,11 @@ async function submit() {
       })),
       // The duplicates were reviewed above: import exactly the checked rows
       allowDuplicates: true,
+      currentBalanceCents: currentCents.value ?? undefined,
     });
     // Unchecked rows (duplicates left out) count as skipped
     const total = { ...summary, skipped: summary.skipped + count.value - selectedCount.value };
-    // After the import, so a failed import changes nothing; the transactions
-    // are in then, whatever happens here
-    let warning: string | undefined;
-    if (initialCents.value !== null) {
-      const { name, type } = account.value;
-      try {
-        await api.updateAccount(account.value._id, { name, type, initialBalanceCents: initialCents.value });
-      } catch (err) {
-        warning = `Le solde initial n'a pas pu être enregistré : ${(err as Error).message}`;
-      }
-    }
-    emit('done', account.value, total, warning);
+    emit('done', account.value, total);
   } catch (err) {
     error.value = (err as Error).message;
     saving.value = false;
@@ -259,9 +244,6 @@ async function submit() {
               placeholder="0,00"
               class="w-48"
             />
-            <p v-if="initialCents !== null && !Number.isNaN(initialCents)" class="text-sm text-muted-foreground">
-              Solde avant ces transactions : {{ formatCents(initialCents, account.currency) }}
-            </p>
             <!-- After "Importer" with nothing entered: a second click imports anyway -->
             <div
               v-if="balanceWarned && !currentBalance.trim()"

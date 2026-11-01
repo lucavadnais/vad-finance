@@ -1,7 +1,9 @@
 // Transfers between own accounts: the money leaves one account (negative
 // transaction) and arrives in another (positive transaction). A transaction is
 // a transfer when it has a `transferAccount` (the other side); once both sides
-// are in the app they also point to each other through `transferPeer`.
+// are in the app they also point to each other through `transferPeer`. When
+// the other side is not in the app (e.g. an account whose statement is never
+// imported), the app creates it (`autoCreated`) until the real one is imported.
 // Transfers carry no category: they are neither income nor spending.
 import Account from '../models/Account.js';
 import Transaction from '../models/Transaction.js';
@@ -158,14 +160,120 @@ export async function unlinkTransfer(transaction) {
   await Transaction.updateOne({ _id: transaction._id, user }, { transferPeer: null });
 }
 
-// Keeps transfer fields consistent after a create or an edit: a transfer has
-// no category, and a transaction that is no longer a transfer loses its link
-export async function syncTransferAfterUpdate(transaction) {
-  if (transaction.transferAccount) {
-    if (transaction.category) {
-      await Transaction.updateOne({ _id: transaction._id, user: transaction.user }, { category: null });
+// Creates the other side of a transfer that has none, in its other account:
+// same date and description, opposite amount, linked both ways
+export async function createMissingSide(transaction) {
+  const { user } = transaction;
+  const peer = await Transaction.create({
+    user,
+    account: transaction.transferAccount,
+    date: transaction.date,
+    description: transaction.description,
+    amountCents: -transaction.amountCents,
+    transferAccount: transaction.account,
+    transferPeer: transaction._id,
+    autoCreated: true,
+  });
+  await Transaction.updateOne({ _id: transaction._id, user }, { transferPeer: peer._id });
+  return peer;
+}
+
+// After an import: the imported transfers still without their other side (no
+// match in autoLinkTransfers) get one. Returns how many were created.
+export async function createMissingSides(transactions) {
+  const ids = transactions.filter((t) => t.transferAccount).map((t) => t._id);
+  if (!ids.length) return 0;
+  const lone = await Transaction.find({ user: transactions[0].user, _id: { $in: ids }, transferPeer: null });
+  for (const t of lone) await createMissingSide(t);
+  return lone.length;
+}
+
+// Rows about to be imported into `account` that are the real version of a side
+// the app created (same amount, at most MAX_DAYS_APART apart, closest date
+// first) take its place: that side gets the real date and description and
+// keeps its link, so the statement adds no duplicate. Returns the rows left to
+// insert and how many replaced a created side.
+export async function replaceAutoCreated(user, account, rows) {
+  const created = await Transaction.find({ user, account, autoCreated: true }).lean();
+  if (!created.length) return { rest: rows, replaced: 0 };
+
+  const pairs = [];
+  rows.forEach((row, index) => {
+    for (const c of created) {
+      if (c.amountCents !== row.amountCents) continue;
+      // A row marked as a transfer towards a third account is not this one
+      if (row.transferAccount && String(row.transferAccount) !== String(c.transferAccount)) continue;
+      const days = Math.abs(new Date(row.date) - c.date) / DAY_MS;
+      if (days <= MAX_DAYS_APART) pairs.push({ index, created: c, days });
     }
-  } else if (transaction.transferPeer) {
+  });
+  pairs.sort((a, b) => a.days - b.days);
+
+  const usedRows = new Set();
+  const usedCreated = new Set();
+  for (const { index, created: c } of pairs) {
+    if (usedRows.has(index) || usedCreated.has(String(c._id))) continue;
+    usedRows.add(index);
+    usedCreated.add(String(c._id));
+    const { date, description } = rows[index];
+    await Transaction.updateOne({ _id: c._id, user }, { date, description, autoCreated: false });
+  }
+  return { rest: rows.filter((_, i) => !usedRows.has(i)), replaced: usedRows.size };
+}
+
+// Deletes a transaction. A side the app created goes with it; a real other
+// side stays, unlinked.
+export async function deleteTransaction(transaction) {
+  const { user } = transaction;
+  const peer = transaction.transferPeer && (await Transaction.findOne({ _id: transaction.transferPeer, user }));
+  if (peer?.autoCreated) await Transaction.deleteOne({ _id: peer._id, user });
+  else await unlinkTransfer(transaction);
+  await Transaction.deleteOne({ _id: transaction._id, user });
+}
+
+// Keeps transfer fields consistent after a create or an edit:
+// - a transfer has no category, and has its other side: the side the app
+//   created follows the edits; a real side in another account than the chosen
+//   one is unlinked; without a side, an existing match is linked, or else the
+//   side is created;
+// - a transaction that is no longer a transfer loses its link, and the side
+//   the app created for it.
+export async function syncTransferAfterUpdate(transaction) {
+  const { user } = transaction;
+  let peer = transaction.transferPeer && (await Transaction.findOne({ _id: transaction.transferPeer, user }));
+
+  if (!transaction.transferAccount) {
+    if (peer?.autoCreated) {
+      await Transaction.deleteOne({ _id: peer._id, user });
+      await Transaction.updateOne({ _id: transaction._id, user }, { transferPeer: null });
+    } else if (transaction.transferPeer) {
+      await unlinkTransfer(transaction);
+    }
+    return;
+  }
+
+  if (transaction.category) {
+    await Transaction.updateOne({ _id: transaction._id, user }, { category: null });
+  }
+  if (peer?.autoCreated) {
+    await Transaction.updateOne(
+      { _id: peer._id, user },
+      {
+        account: transaction.transferAccount,
+        transferAccount: transaction.account,
+        date: transaction.date,
+        description: transaction.description,
+        amountCents: -transaction.amountCents,
+      },
+    );
+    return;
+  }
+  if (peer && String(peer.account) !== String(transaction.transferAccount)) {
     await unlinkTransfer(transaction);
+    peer = null;
+  }
+  if (!peer) {
+    const lone = { ...transaction.toObject(), transferPeer: null };
+    if (!(await autoLinkTransfers([lone]))) await createMissingSide(lone);
   }
 }

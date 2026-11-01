@@ -50,14 +50,15 @@ export function useCsvImport(onImported: () => void) {
     fileName.value = '';
   }
 
-  // The preview's `done`: `warning` when something after the import failed
-  function onDone(account: Account, { inserted, skipped, linked }: ImportSummary, warning?: string) {
+  // The preview's `done`
+  function onDone(account: Account, { inserted, skipped, linked, created }: ImportSummary) {
     reset();
-    error.value = warning ?? '';
+    error.value = '';
     message.value =
       `${inserted} transaction(s) importée(s) dans « ${account.name} »` +
       (skipped > 0 ? `, ${skipped} doublon(s) non importé(s)` : '') +
-      (linked > 0 ? `, ${linked} transfert(s) relié(s) à l'autre compte` : '');
+      (linked > 0 ? `, ${linked} transfert(s) relié(s) à l'autre compte` : '') +
+      (created > 0 ? `, ${created} transfert(s) ajouté(s) dans l'autre compte` : '');
     onImported();
   }
 

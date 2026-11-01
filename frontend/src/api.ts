@@ -150,7 +150,12 @@ export const api = {
   deleteProjection: (id: string) => request<null>(`/projections/${id}`, { method: 'DELETE' }),
   getSettings: () => request<Settings>('/settings'),
   updateSettings: (body: Partial<Settings>) => request<Settings>('/settings', { method: 'PUT', body }),
-  importTransactions: (body: { account: string; transactions: ParsedTransaction[]; allowDuplicates?: boolean }) =>
+  importTransactions: (body: {
+    account: string;
+    transactions: ParsedTransaction[];
+    allowDuplicates?: boolean;
+    currentBalanceCents?: number;
+  }) =>
     request<ImportSummary>('/transactions/import', { method: 'POST', body }),
 };
 

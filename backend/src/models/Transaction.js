@@ -13,6 +13,10 @@ const transactionSchema = new mongoose.Schema(
     // other side, and the matching transaction there once both sides are linked
     transferAccount: { type: mongoose.Schema.Types.ObjectId, ref: 'Account', default: null },
     transferPeer: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
+    // The other side of a transfer, created by the app because it was not in
+    // the app yet (e.g. a deposit to an account whose statement is never
+    // imported). Importing that account's statement replaces it with the real row.
+    autoCreated: { type: Boolean, default: false },
     // Set when the user dismissed a suggested pair, so it is not suggested again
     transferIgnored: { type: Boolean, default: false },
     // Transactions the user said this one is not a duplicate of (lib/duplicates.js)

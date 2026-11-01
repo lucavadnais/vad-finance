@@ -3,7 +3,13 @@ import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import Transaction from '../models/Transaction.js';
 import { checkDuplicates } from '../lib/duplicates.js';
-import { autoLinkTransfers, syncTransferAfterUpdate, unlinkTransfer } from '../lib/transfers.js';
+import {
+  autoLinkTransfers,
+  createMissingSides,
+  deleteTransaction,
+  replaceAutoCreated,
+  syncTransferAfterUpdate,
+} from '../lib/transfers.js';
 import { parseTransactionsCsv } from '../lib/parseTransactionsCsv.js';
 
 const router = Router();
@@ -33,12 +39,18 @@ router.post('/check-duplicates', async (req, res) => {
   res.json(await checkDuplicates(req.userId, account, transactions));
 });
 
-// Body: { account, transactions: [{ date, description, amountCents, category?, transferAccount? }], allowDuplicates? }
+// Body: { account, transactions: [{ date, description, amountCents, category?, transferAccount? }], allowDuplicates?, currentBalanceCents? }
 // By default skips transactions already in the account, so importing the same
 // file twice adds nothing. Identical rows (same date, description and amount)
 // are compared by count: a file with two identical coffees adds two,
 // re-importing it adds none. `allowDuplicates` inserts every row as given (the
 // user already reviewed the duplicates in the import preview).
+// Rows that are the real version of a transfer side the app created replace
+// it. Imported transfers are linked to their other side, created when missing.
+// `currentBalanceCents`, the account's balance today as the bank shows it,
+// sets the initial balance so that the balance after the import matches it,
+// whatever the account held before (created transfer sides included).
+// Returns { inserted, skipped, linked, created }.
 router.post('/import', async (req, res) => {
   const { account: accountId, transactions, allowDuplicates } = req.body;
   if (!Array.isArray(transactions)) {
@@ -46,6 +58,10 @@ router.post('/import', async (req, res) => {
   }
   if (transactions.some((t) => Number.isNaN(Date.parse(t.date)) || !Number.isInteger(t.amountCents))) {
     return res.status(400).json({ error: 'Transaction avec une date ou un montant invalide' });
+  }
+  const { currentBalanceCents } = req.body;
+  if (currentBalanceCents != null && !Number.isInteger(currentBalanceCents)) {
+    return res.status(400).json({ error: 'Solde invalide' });
   }
   const user = req.userId;
   const account = await Account.findOne({ _id: accountId, user });
@@ -58,7 +74,10 @@ router.post('/import', async (req, res) => {
 
   const key = (t) => `${new Date(t.date).toISOString()}|${t.description}|${t.amountCents}`;
   const existingCount = new Map();
-  const existing = await Transaction.find({ user, account: account._id }, 'date description amountCents');
+  const existing = await Transaction.find(
+    { user, account: account._id, autoCreated: { $ne: true } },
+    'date description amountCents',
+  );
   for (const t of existing) existingCount.set(key(t), (existingCount.get(key(t)) ?? 0) + 1);
 
   const toInsert = [];
@@ -69,8 +88,7 @@ router.post('/import', async (req, res) => {
       date: t.date,
       description: t.description ?? '',
       amountCents: t.amountCents,
-      // Chosen in the import preview. A transfer between own accounts has no
-      // category; its other side can then be linked from the suggestions.
+      // Chosen in the import preview. A transfer between own accounts has no category.
       category: t.transferAccount ? null : t.category || null,
       transferAccount: t.transferAccount || null,
     };
@@ -79,10 +97,24 @@ router.post('/import', async (req, res) => {
     else toInsert.push(doc);
   }
 
-  const inserted = await Transaction.insertMany(toInsert);
-  // Rows marked as transfers get linked to their other side when it is already here
+  const { rest, replaced } = await replaceAutoCreated(user, account._id, toInsert);
+  const inserted = await Transaction.insertMany(rest);
+  // Rows marked as transfers get linked to their other side when it is already
+  // here, or else get one
   const linked = await autoLinkTransfers(inserted);
-  res.status(201).json({ inserted: inserted.length, skipped: transactions.length - inserted.length, linked });
+  const created = await createMissingSides(inserted);
+  const count = inserted.length + replaced;
+  if (currentBalanceCents != null) {
+    const [sum] = await Transaction.aggregate([
+      { $match: { user, account: account._id } },
+      { $group: { _id: null, totalCents: { $sum: '$amountCents' } } },
+    ]);
+    await Account.updateOne(
+      { _id: account._id, user },
+      { initialBalanceCents: currentBalanceCents - (sum?.totalCents ?? 0) },
+    );
+  }
+  res.status(201).json({ inserted: count, skipped: transactions.length - count, linked: linked + replaced, created });
 });
 
 const MAX_PAGE_SIZE = 200;
@@ -186,8 +218,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const transaction = await Transaction.findOne({ _id: req.params.id, user: req.userId });
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
-  await unlinkTransfer(transaction);
-  await Transaction.deleteOne({ _id: transaction._id, user: req.userId });
+  await deleteTransaction(transaction);
   res.status(204).end();
 });
 

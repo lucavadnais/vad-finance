@@ -26,7 +26,14 @@ router.get('/', async (req, res) => {
   const accounts = await Account.find({ user: req.userId }).sort({ name: 1 }).collation(FRENCH).lean();
   const totals = await Transaction.aggregate([
     { $match: { user: req.userId } },
-    { $group: { _id: '$account', totalCents: { $sum: '$amountCents' }, count: { $sum: 1 } } },
+    {
+      $group: {
+        _id: '$account',
+        totalCents: { $sum: '$amountCents' },
+        count: { $sum: 1 },
+        autoCreatedCount: { $sum: { $cond: ['$autoCreated', 1, 0] } },
+      },
+    },
   ]);
   const totalByAccount = new Map(totals.map((t) => [String(t._id), t]));
 
@@ -37,6 +44,9 @@ router.get('/', async (req, res) => {
         ...a,
         balanceCents: a.initialBalanceCents + (total?.totalCents ?? 0),
         transactionCount: total?.count ?? 0,
+        // Transfer sides the app created (lib/transfers.js): an account with
+        // only those has never been imported
+        autoCreatedCount: total?.autoCreatedCount ?? 0,
       };
     }),
   );
@@ -154,7 +164,9 @@ router.delete('/:id', async (req, res) => {
 
   const removed = await Transaction.find({ user, account: account._id }, '_id');
   await Transaction.deleteMany({ user, account: account._id });
-  // Transfers from other accounts lose their link to the deleted side
+  // Sides the app created for the deleted transfers go with them; the other
+  // transfers lose their link to the deleted side
+  await Transaction.deleteMany({ user, autoCreated: true, transferPeer: { $in: removed.map((t) => t._id) } });
   await Transaction.updateMany({ user, transferPeer: { $in: removed.map((t) => t._id) } }, { transferPeer: null });
   await Transaction.updateMany({ user, transferAccount: account._id }, { transferAccount: null });
   await Account.deleteOne({ _id: account._id, user });

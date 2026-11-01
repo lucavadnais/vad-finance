@@ -22,6 +22,8 @@ export interface Account {
   initialBalanceCents: number;
   balanceCents: number;
   transactionCount: number;
+  // Transfer sides the app created: an account with only those was never imported
+  autoCreatedCount: number;
 }
 
 export type AccountInput = Pick<Account, 'name' | 'type' | 'initialBalanceCents'>;
@@ -168,6 +170,8 @@ export interface ImportSummary {
   skipped: number;
   // Imported transfers linked to their other side, already in the app
   linked: number;
+  // Imported transfers whose other side was not in the app: created there
+  created: number;
 }
 
 // App settings (GET/PUT /settings)

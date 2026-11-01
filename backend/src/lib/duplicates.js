@@ -21,8 +21,9 @@ function matchKind(candidate, existing) {
 // matches first, so a statement with two identical coffees against one saved
 // coffee flags only one of them.
 export async function checkDuplicates(user, accountId, candidates) {
+  // A side the app created is replaced by its real row on import, not duplicated
   const existing = await Transaction.find(
-    { user, account: accountId },
+    { user, account: accountId, autoCreated: { $ne: true } },
     'date description amountCents',
   ).lean();
 

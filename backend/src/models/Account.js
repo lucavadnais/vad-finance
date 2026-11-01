@@ -22,6 +22,9 @@ const accountSchema = new mongoose.Schema(
     currency: { type: String, default: 'CAD', uppercase: true },
     // Amounts are stored in cents to avoid floating-point errors
     initialBalanceCents: { type: Number, default: 0 },
+    // Left out of the total of the accounts (its balance and curve), e.g. a
+    // savings account kept apart. Still listed, with its own balance.
+    excludedFromTotal: { type: Boolean, default: false },
   },
   {
     timestamps: true,

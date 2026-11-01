@@ -48,6 +48,7 @@ async function remove() {
 <template>
   <DefineCategory>
     <Badge v-if="transaction.transferAccount" variant="outline">Transfert</Badge>
+    <Badge v-else-if="transaction.valuation" variant="outline">Variation de valeur</Badge>
     <Badge v-else-if="transaction.category" variant="outline" class="max-w-32" :title="transaction.category.name">
       <CategoryDot :color="categoryColors.get(transaction.category._id)" />
       <span class="truncate">{{ transaction.category.name }}</span>

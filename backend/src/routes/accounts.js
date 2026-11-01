@@ -15,7 +15,7 @@ const httpError = (status, message) => Object.assign(new Error(message), { statu
 // stays fixed: changing it would reinterpret every amount already recorded.
 function editable(body) {
   const fields = {};
-  for (const key of ['name', 'type', 'initialBalanceCents']) {
+  for (const key of ['name', 'type', 'initialBalanceCents', 'excludedFromTotal']) {
     if (body[key] !== undefined) fields[key] = body[key];
   }
   return fields;
@@ -104,6 +104,37 @@ router.get('/:id/logo', async (req, res) => {
     'X-Content-Type-Options': 'nosniff',
   });
   res.send(account.logo.data);
+});
+
+// Body: { date: 'YYYY-MM-DD', valueCents }, the account's real value on that
+// day (an investment's market value). The gain or loss the app does not know
+// of, the gap with the balance it computes for that day, is recorded as a
+// `valuation` transaction so both match. Returns it, or null when they already do.
+router.post('/:id/valuation', async (req, res) => {
+  const { date, valueCents } = req.body;
+  if (typeof date !== 'string' || Number.isNaN(Date.parse(date)) || !Number.isInteger(valueCents)) {
+    throw httpError(400, 'Date ou valeur invalide');
+  }
+  const user = req.userId;
+  const account = await Account.findOne({ _id: req.params.id, user });
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+
+  const day = new Date(date);
+  const [sum] = await Transaction.aggregate([
+    { $match: { user, account: account._id, date: { $lte: day } } },
+    { $group: { _id: null, totalCents: { $sum: '$amountCents' } } },
+  ]);
+  const gapCents = valueCents - (account.initialBalanceCents + (sum?.totalCents ?? 0));
+  if (gapCents === 0) return res.json(null);
+  const transaction = await Transaction.create({
+    user,
+    account: account._id,
+    date: day,
+    description: gapCents > 0 ? 'Gain de valeur' : 'Perte de valeur',
+    amountCents: gapCents,
+    valuation: true,
+  });
+  res.status(201).json(transaction);
 });
 
 // Moves every transaction of `from` into `to`, keeping the balance of `to` plus

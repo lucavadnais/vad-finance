@@ -6,7 +6,7 @@
 import type { Account, AccountType } from '@/types';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { ImagePlus, Info, Plus, Trash2 } from '@lucide/vue';
-import { accountLogoUrl, api, formatCents, LOGO_TYPES, toCents } from '@/api';
+import { accountLogoUrl, api, centsInput, formatCents, LOGO_TYPES, toCents } from '@/api';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import AccountDeleteDialog from './AccountDeleteDialog.vue';
 import InfoTooltip from './InfoTooltip.vue';
 import OptionSelect from './OptionSelect.vue';
@@ -37,6 +38,7 @@ const deleteOpen = ref(false);
 const name = ref('');
 const type = ref<AccountType>('checking');
 const initialBalance = ref('0');
+const excludedFromTotal = ref(false);
 const saving = ref(false);
 const error = ref('');
 
@@ -115,7 +117,8 @@ function onOpenChange(value: boolean) {
     const a = props.account;
     name.value = a?.name ?? '';
     type.value = a?.type ?? 'checking';
-    initialBalance.value = a ? String(a.initialBalanceCents / 100).replace('.', ',') : '0';
+    initialBalance.value = centsInput(a?.initialBalanceCents ?? 0);
+    excludedFromTotal.value = a?.excludedFromTotal ?? false;
     error.value = '';
     setLogo(null);
     selected.value = a?.logoUpdatedAt ? CUSTOM : null;
@@ -140,7 +143,12 @@ function notify() {
 async function submit() {
   saving.value = true;
   error.value = '';
-  const body = { name: name.value, type: type.value, initialBalanceCents: toCents(initialBalance.value) };
+  const body = {
+    name: name.value,
+    type: type.value,
+    initialBalanceCents: toCents(initialBalance.value),
+    excludedFromTotal: excludedFromTotal.value,
+  };
   try {
     const account = props.account ? await api.updateAccount(props.account._id, body) : await api.createAccount(body);
     // The account is saved now: close even if the image fails, so it is not created twice
@@ -208,6 +216,17 @@ function askDelete() {
             }}{{ formatCents(balanceShiftCents, account.currency) }}). Toute la courbe du solde se déplacera du même
             montant ; vos transactions ne changent pas.
           </p>
+          <!-- Explained in plain sight: no hover on a phone -->
+          <div class="flex items-start gap-3">
+            <Switch id="account-excluded" v-model="excludedFromTotal" class="mt-0.5" />
+            <div class="flex flex-col gap-1">
+              <Label for="account-excluded">Exclure du total</Label>
+              <p class="text-sm text-muted-foreground">
+                Son solde n'entre pas dans le total des comptes ni dans sa courbe. Le compte reste listé avec son propre
+                solde.
+              </p>
+            </div>
+          </div>
           <div class="flex flex-col gap-2">
             <Label>Image <span class="font-normal text-muted-foreground">(facultative)</span></Label>
             <div class="flex flex-wrap items-center gap-2">

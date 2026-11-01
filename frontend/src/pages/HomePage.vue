@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ChartLine, Eye, EyeOff, Landmark, Pencil, Plus, Table2, X } from '@lucide/vue';
+import { ChartLine, Eye, EyeOff, Landmark, Pencil, Plus, Table2, TrendingUp, X } from '@lucide/vue';
 import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
@@ -9,7 +9,7 @@ import { useSelectedAccount } from '@/composables/useSelectedAccount';
 import { useSelectedMonth, useSelectedPeriod } from '@/composables/useSelectedMonth';
 import { duplicateKey, useDuplicateReview } from '@/composables/useDuplicateReview';
 import { useTransferReview } from '@/composables/useTransferReview';
-import { TOTAL_SERIES, accountSeries, balanceOverTime, periodStart } from '@/lib/chartData';
+import { TOTAL_SERIES, accountSeries, balanceOverTime, inTotal, periodStart } from '@/lib/chartData';
 import { addMonths, currentMonth, sameMonth } from '@/lib/projections';
 import { useMediaQuery } from '@vueuse/core';
 import type { Row } from '@/lib/chartData';
@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AccountForm from '@/components/AccountForm.vue';
 import AccountLogo from '@/components/AccountLogo.vue';
+import AccountValueDialog from '@/components/AccountValueDialog.vue';
 import CsvImport from '@/components/CsvImport.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import MobileTabBar, { type HomeTab } from '@/components/MobileTabBar.vue';
@@ -80,7 +81,8 @@ const { amountsHidden, toggle: toggleAmounts } = useAmountsHidden();
 // Clicked again, or the cross by its name, back to all of them
 const selectedId = useSelectedAccount();
 const selected = computed(() => accounts.value.find((a) => a._id === selectedId.value));
-const shownAccounts = computed(() => (selected.value ? [selected.value] : accounts.value));
+// All of them: those counted in the total. One picked: it, even when left out
+const shownAccounts = computed(() => (selected.value ? [selected.value] : inTotal(accounts.value)));
 const toggleAccount = (id: string) => (selectedId.value = selectedId.value === id ? 'all' : id);
 // Deleted from its dialog
 watch(selected, (a) => {
@@ -292,9 +294,21 @@ const tabAlerts = computed(() => ({
                 <span class="flex min-w-0 flex-wrap gap-x-2">
                   <span class="font-medium">{{ a.name }}</span>
                   <span class="text-muted-foreground">({{ ACCOUNT_TYPES[a.type] ?? a.type }})</span>
+                  <span v-if="a.excludedFromTotal" class="text-muted-foreground">· hors total</span>
                 </span>
                 <span class="ml-auto tabular-nums">{{ formatCents(a.balanceCents, a.currency) }}</span>
               </button>
+              <!-- An investment's value moves with the market: brought to it by hand -->
+              <AccountValueDialog v-if="a.type === 'investment'" :account="a" @changed="refresh">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  :aria-label="`Mettre à jour la valeur de ${a.name}`"
+                  :title="`Mettre à jour la valeur de ${a.name}`"
+                >
+                  <TrendingUp />
+                </Button>
+              </AccountValueDialog>
               <AccountForm :account="a" :accounts="accounts" @changed="refresh" @error="setError">
                 <Button size="icon-sm" variant="ghost" :aria-label="`Modifier ${a.name}`" :title="`Modifier ${a.name}`">
                   <Pencil />

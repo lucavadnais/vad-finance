@@ -11,6 +11,7 @@ import {
   PERIODS,
   accountSeries,
   balanceOverTime,
+  inTotal,
   expenseSeries,
   expensesByMonth,
   periodStart,
@@ -64,10 +65,11 @@ const selectedTransactions = computed(() =>
   selectedExpenses(scoped.value, selection.value, expenses.value.keyOf, from.value),
 );
 
-// The total balance after each day (all accounts summed)
-const balance = computed(() =>
-  balanceOverTime(scoped.value, props.accounts, accountSeries(props.accounts), from.value, now.value),
-);
+// The total balance after each day (the accounts counted in the total, summed)
+const balance = computed(() => {
+  const accounts = inTotal(props.accounts);
+  return balanceOverTime(scoped.value, accounts, accountSeries(accounts), from.value, now.value);
+});
 </script>
 
 <template>

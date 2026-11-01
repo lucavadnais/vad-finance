@@ -17,6 +17,10 @@ const transactionSchema = new mongoose.Schema(
     // the app yet (e.g. a deposit to an account whose statement is never
     // imported). Importing that account's statement replaces it with the real row.
     autoCreated: { type: Boolean, default: false },
+    // Gain or loss recorded by POST /api/accounts/:id/valuation so the balance
+    // matches the account's real value (an investment's market value). Like a
+    // transfer it is neither spent nor earned: left out of the budget.
+    valuation: { type: Boolean, default: false },
     // Set when the user dismissed a suggested pair, so it is not suggested again
     transferIgnored: { type: Boolean, default: false },
     // Transactions the user said this one is not a duplicate of (lib/duplicates.js)

@@ -39,8 +39,13 @@ const amountPlaceholder = computed(() =>
     ? 'Montant de la dépense'
     : categoryKind.value === 'income'
       ? 'Montant du revenu'
-      : 'Montant (négatif = dépense)',
+      : 'Montant',
 );
+// Red for an expense, green for income, as in the lists
+const amountClass = computed(() => {
+  const cents = signedCents(amount.value, categoryKind.value);
+  return cents < 0 ? 'text-destructive' : cents > 0 ? 'text-emerald-600' : '';
+});
 
 // A similar transaction already saved: ask before adding (e.g. entered twice,
 // or already imported from the statement)
@@ -167,7 +172,14 @@ async function finish(save: () => Promise<unknown>) {
         </div>
         <div class="flex flex-col gap-2">
           <Label for="manual-amount">Montant</Label>
-          <Input id="manual-amount" v-model="amount" inputmode="decimal" :placeholder="amountPlaceholder" required />
+          <Input
+            id="manual-amount"
+            v-model="amount"
+            inputmode="decimal"
+            :placeholder="amountPlaceholder"
+            :class="amountClass"
+            required
+          />
         </div>
       </template>
     </div>

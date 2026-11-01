@@ -168,7 +168,12 @@ function monthTransactions(keys: Set<string>) {
   return props.transactions
     .filter((t) => {
       const d = new Date(t.date);
-      if (t.transferAccount || d.getUTCFullYear() !== props.month.year || d.getUTCMonth() !== props.month.month)
+      if (
+        t.transferAccount ||
+        t.valuation ||
+        d.getUTCFullYear() !== props.month.year ||
+        d.getUTCMonth() !== props.month.month
+      )
         return false;
       // Keyed as in lib/budget.ts: the category, or "none" and the sign
       const id = t.category?._id;

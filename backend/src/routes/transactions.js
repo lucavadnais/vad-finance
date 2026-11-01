@@ -189,12 +189,15 @@ router.get('/', async (req, res) => {
   res.json({ items, total, page, pageSize });
 });
 
-// Links between the two sides of a transfer go through /api/transfers only.
+// Links between the two sides of a transfer go through /api/transfers only,
+// value updates through /api/accounts/:id/valuation. A value update given a
+// category or made a transfer becomes an ordinary transaction.
 // The account, category and other side of a transfer must be the user's.
 async function editable(user, body) {
-  const { transferPeer, transferIgnored, duplicateIgnored, user: _, ...rest } = body;
+  const { transferPeer, transferIgnored, duplicateIgnored, valuation, user: _, ...rest } = body;
   await Account.checkOwned(user, rest.account, rest.transferAccount);
   await Category.checkOwned(user, rest.category);
+  if (rest.category || rest.transferAccount) rest.valuation = false;
   return rest;
 }
 

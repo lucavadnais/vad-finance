@@ -79,6 +79,10 @@ export const api = {
       body: file,
     }),
   deleteAccountLogo: (id: string) => request<Account>(`/accounts/${id}/logo`, { method: 'DELETE' }),
+  // The account's real value on `date` ('YYYY-MM-DD'): records the gap with its
+  // balance as a gain or loss (null when there is none)
+  updateAccountValue: (id: string, body: { date: string; valueCents: number }) =>
+    request<Transaction | null>(`/accounts/${id}/valuation`, { method: 'POST', body }),
   getCategories: () => request<Category[]>('/categories'),
   // Without a color, the backend draws one
   createCategory: (body: {
@@ -198,8 +202,16 @@ export const amountTickFormat = computed(() => {
   return (cents: number) => (hidden ? MASK_COMPACT : formatCentsCompact(cents));
 });
 
+// Spaces are thousands separators: "36 291,28" is 36291.28
 export function toCents(value: string | number) {
-  return Math.round(parseFloat(String(value).replace(',', '.')) * 100);
+  return Math.round(parseFloat(String(value).replace(/\s/g, '').replace(',', '.')) * 100);
+}
+
+// An amount to edit in a field, e.g. "36 291,28" (plain spaces, no currency)
+export function centsInput(cents: number) {
+  return new Intl.NumberFormat('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(cents / 100)
+    .replace(/\s/g, ' ');
 }
 
 // With a category, its kind gives the sign (whatever was typed): expenses are

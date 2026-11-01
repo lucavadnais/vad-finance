@@ -37,16 +37,20 @@ export function setUnauthorizedHandler(handler: () => void) {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, ...rest } = options;
+  // No answer at all (offline, server down): fetch's own "Failed to fetch" means nothing to the user
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...rest,
     // Files (Blob) are sent as-is, everything else as JSON
     body: body instanceof Blob ? body : body !== undefined ? JSON.stringify(body) : undefined,
+  }).catch(() => {
+    throw new Error('Serveur injoignable, vérifiez votre connexion');
   });
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized();
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `HTTP ${res.status}`);
+    // No message from the API (e.g. a proxy's error page)
+    throw new Error(data.error || 'Une erreur est survenue, réessayez');
   }
   return (res.status === 204 ? null : await res.json()) as T;
 }

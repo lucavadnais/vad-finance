@@ -3,6 +3,7 @@ import path from 'node:path';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import { connectDb } from './db.js';
+import Category from './models/Category.js';
 import { requireAuth } from './lib/auth.js';
 import authRouter from './routes/auth.js';
 import accountsRouter from './routes/accounts.js';
@@ -68,18 +69,28 @@ if (fs.existsSync(dist)) {
 app.use((err, req, res, next) => {
   // Errors thrown by our own code with an HTTP status (see lib/transfers.js)
   if (err.status) return res.status(err.status).json({ error: err.message });
+  // Mongoose's own messages are technical (field paths, values, ids): logged,
+  // not shown
   if (err.name === 'ValidationError' || err.name === 'CastError') {
-    return res.status(400).json({ error: err.message });
+    console.warn(err.message);
+    return res.status(400).json({ error: 'Données invalides' });
   }
-  // Unique index violation (e.g. two categories with the same name)
+  // Unique index violation (e.g. two categories with the same name). Its key
+  // holds the user's id too: only the name is shown
   if (err.code === 11000) {
-    return res.status(409).json({ error: `« ${Object.values(err.keyValue ?? {}).join(', ')} » existe déjà` });
+    const name = err.keyValue?.name;
+    return res.status(409).json({ error: name ? `« ${name} » existe déjà` : 'Cet élément existe déjà' });
   }
   console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(500).json({ error: 'Une erreur est survenue, réessayez' });
 });
 
 const port = process.env.PORT || 3000;
 
 await connectDb(process.env.MONGO_URL);
+// Mongoose creates the indexes a schema declares, but never drops the ones it
+// no longer does: the categories' old unique { user, name } would still refuse
+// an expense and an income of the same name. Does nothing once in line.
+// TODO: remove (and the Category import) once production has started with it
+await Category.syncIndexes();
 app.listen(port, () => console.log(`API listening on port ${port}`));

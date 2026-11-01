@@ -32,7 +32,7 @@ router.put('/:id', async (req, res) => {
   const fields = editable(req.body);
   const filter = { _id: req.params.id, user: req.userId };
   const current = await Category.findOne(filter, 'archived').lean();
-  if (!current) return res.status(404).json({ error: 'Category not found' });
+  if (!current) return res.status(404).json({ error: 'Catégorie introuvable' });
   if (current.archived && !(fields.archived === false && Object.keys(fields).length === 1)) {
     return res.status(409).json({ error: 'Désarchivez la catégorie pour la modifier' });
   }
@@ -44,14 +44,14 @@ router.put('/:id', async (req, res) => {
     new: true,
     runValidators: true,
   });
-  if (!category) return res.status(404).json({ error: 'Category not found' });
+  if (!category) return res.status(404).json({ error: 'Catégorie introuvable' });
   res.json(category);
 });
 
 router.delete('/:id', async (req, res) => {
   const user = req.userId;
   const category = await Category.findOneAndDelete({ _id: req.params.id, user });
-  if (!category) return res.status(404).json({ error: 'Category not found' });
+  if (!category) return res.status(404).json({ error: 'Catégorie introuvable' });
   await Transaction.updateMany({ user, category: category._id }, { $unset: { category: 1 } });
   await Projection.updateMany({ user, category: category._id }, { category: null });
   res.status(204).end();

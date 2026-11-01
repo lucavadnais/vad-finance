@@ -31,14 +31,14 @@ router.put('/:id', async (req, res) => {
     new: true,
     runValidators: true,
   });
-  if (!group) return res.status(404).json({ error: 'Group not found' });
+  if (!group) return res.status(404).json({ error: 'Groupe introuvable' });
   res.json(group);
 });
 
 // Its categories stay, without a group
 router.delete('/:id', async (req, res) => {
   const group = await CategoryGroup.findOneAndDelete({ _id: req.params.id, user: req.userId });
-  if (!group) return res.status(404).json({ error: 'Group not found' });
+  if (!group) return res.status(404).json({ error: 'Groupe introuvable' });
   await Category.updateMany({ user: req.userId, group: group._id }, { group: null });
   res.status(204).end();
 });

@@ -74,6 +74,9 @@ const homeBuiltYear = ref('');
 const ownsRental = ref(false);
 const rentalExpenses = ref('');
 const custom = ref('');
+const DISCLAIMER = 'Repères généraux, pas un conseil financier personnalisé.';
+const ACCOUNT_HELP =
+  "Si vous avez déjà un compte pour votre fonds d'urgence, associez-le ici. Sinon, sélectionnez « Aucun compte » pour mettre de l'argent de côté depuis l'app.";
 const account = ref<string | null | undefined>();
 // Without an account: what it holds left out of the total of the accounts
 const hiddenFromTotal = ref(false);
@@ -218,8 +221,8 @@ const target = computed(() => (mode.value === 'situation' ? computedTarget.value
 // step; already set up, it is whole from the start.
 const seen = ref(0);
 const isSeen = (s: Step) => wizardSteps.value.indexOf(s) <= seen.value;
-// The target once every step is reached
-const shown = computed(() => (seen.value >= wizardSteps.value.length - 1 ? target.value : null));
+// The target once every step setting it is reached
+const shown = computed(() => (seen.value >= targetSteps.value.length - 1 ? target.value : null));
 const held = computed(() => goalHeldCents(props.fund, props.accounts));
 const heldPercent = computed(() => (shown.value ? Math.min(100, (held.value / shown.value) * 100) : 0));
 const pace = computed(() => savingsPace(props.transactions));
@@ -229,13 +232,14 @@ const ratePercent = computed(() => (pace.value?.rate == null ? null : Math.round
 
 // The wizard under "Votre cible", one step at a time: its steps by how the
 // target is set, any of them picked in its stepper
-type Step = 'method' | 'essentials' | 'situation' | 'home' | 'amount';
+type Step = 'method' | 'essentials' | 'situation' | 'home' | 'amount' | 'account';
 const TITLES: Record<Step, string> = {
   method: 'Comment fixer la cible',
   essentials: 'Vos dépenses essentielles',
   situation: 'Votre situation',
   home: 'Ce que vous possédez',
   amount: 'Le montant',
+  account: 'Compte dédié',
 };
 const SHORT: Record<Step, string> = {
   method: 'Méthode',
@@ -243,10 +247,13 @@ const SHORT: Record<Step, string> = {
   situation: 'Situation',
   home: 'Biens',
   amount: 'Montant',
+  account: 'Compte',
 };
-const wizardSteps = computed<Step[]>(() =>
+// The steps setting the target, then the account
+const targetSteps = computed<Step[]>(() =>
   mode.value === 'situation' ? ['method', 'essentials', 'situation', 'home'] : ['method', 'amount'],
 );
+const wizardSteps = computed<Step[]>(() => [...targetSteps.value, 'account']);
 const stepIndex = ref(0);
 // The method shows as picked once set: none is suggested before the first
 const methodPicked = ref(false);
@@ -318,8 +325,9 @@ async function submit() {
           >
         </DialogHeader>
 
-        <!-- Two columns from a tablet: the wizard setting its target, then the fund and its account (on top on a phone) -->
+        <!-- Two columns from a tablet: the wizard (its target, then its account) beside the fund's target -->
         <DialogBody class="md:grid md:grid-cols-2 md:items-start md:gap-6">
+          <!-- The target first on a phone, then the wizard -->
           <div class="flex min-w-0 flex-col gap-4">
             <!-- What it holds out of its target -->
             <section class="flex flex-col gap-4 rounded-xl bg-muted p-4">
@@ -411,31 +419,15 @@ async function submit() {
                   {{ ratePercent === null ? '—' : `${ratePercent} %` }}
                 </span>
               </div>
+              <p class="text-xs text-muted-foreground">{{ DISCLAIMER }}</p>
             </section>
-
-            <DedicatedAccountField
-              id="fund-account"
-              v-model="account"
-              v-model:hidden-from-total="hiddenFromTotal"
-              :accounts="accounts"
-              :goal="fund"
-            >
-              <template #description>
-                <p class="text-sm text-muted-foreground">
-                  Si vous avez déjà un compte pour votre fonds d'urgence, associez-le ici. Sinon, sélectionnez « Aucun
-                  compte » pour mettre de l'argent de côté depuis l'app.
-                </p>
-              </template>
-              <p v-if="account" class="text-sm text-muted-foreground">Le fonds suit le solde de ce compte.</p>
-            </DedicatedAccountField>
-            <p class="text-xs text-muted-foreground">Repères généraux, pas un conseil financier personnalisé.</p>
           </div>
 
           <div class="flex min-w-0 flex-col gap-4 md:order-first">
             <!-- How the target is set: the wizard, its stepper on top -->
             <WizardFrame
               v-model="stepIndex"
-              class="max-h-165 rounded-xl border p-4"
+              class="md:max-h-165 md:rounded-xl md:border md:p-4"
               :steps="wizardSteps.map((s) => SHORT[s])"
               :title="TITLES[step]"
               choice
@@ -636,7 +628,7 @@ async function submit() {
               </template>
 
               <!-- A custom amount -->
-              <div v-else class="flex flex-col gap-2">
+              <div v-else-if="step === 'amount'" class="flex flex-col gap-2">
                 <Label for="fund-custom">Montant à atteindre</Label>
                 <Input
                   id="fund-custom"
@@ -647,6 +639,20 @@ async function submit() {
                   @keydown="noMinus"
                 />
               </div>
+
+              <!-- Where its money is, last -->
+              <DedicatedAccountField
+                v-else
+                id="fund-account"
+                v-model="account"
+                v-model:hidden-from-total="hiddenFromTotal"
+                :accounts="accounts"
+                :goal="fund"
+                :description="ACCOUNT_HELP"
+                untitled
+              >
+                <p v-if="account" class="text-sm text-muted-foreground">Le fonds suit le solde de ce compte.</p>
+              </DedicatedAccountField>
             </WizardFrame>
           </div>
         </DialogBody>

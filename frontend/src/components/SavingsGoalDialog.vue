@@ -33,6 +33,7 @@ import {
   DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -320,12 +321,10 @@ const submitLabel = computed(() => {
             :description="DESCRIPTIONS[step]"
             :choice="!goal"
             :error="error"
-            cancelable
             :submit-label="submitLabel"
             :saving="saving"
             :blocked="blocked"
             @next="next"
-            @cancel="onOpenChange(false)"
           >
             <!-- What to follow -->
             <RadioGroup v-if="step === 'kind'" v-model="kind" class="gap-3" aria-label="Que voulez-vous suivre ?">
@@ -383,14 +382,8 @@ const submitLabel = computed(() => {
                 v-model:hidden-from-total="hiddenFromTotal"
                 :accounts="accounts"
                 :goal="goal"
-              >
-                <template #description>
-                  <p class="text-sm text-muted-foreground">
-                    Si vous avez déjà un compte pour cette épargne, associez-le à cet objectif. Sinon, sélectionnez «
-                    Aucun compte » pour mettre de l'argent de côté depuis l'app.
-                  </p>
-                </template>
-              </DedicatedAccountField>
+                description="Si vous avez déjà un compte pour cette épargne, associez-le à cet objectif. Sinon, sélectionnez « Aucun compte » pour mettre de l'argent de côté depuis l'app."
+              />
             </template>
 
             <!-- Debt: its name and the payment followed -->
@@ -531,6 +524,11 @@ const submitLabel = computed(() => {
             </template>
           </WizardFrame>
         </DialogBody>
+
+        <!-- Leaving, under the wizard, like the fund's "Fermer" -->
+        <DialogFooter>
+          <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)">Annuler</Button>
+        </DialogFooter>
       </form>
     </DialogContent>
   </Dialog>

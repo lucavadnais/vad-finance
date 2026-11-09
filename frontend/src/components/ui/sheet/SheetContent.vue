@@ -32,6 +32,14 @@ const emits = defineEmits<DialogContentEmits>()
 const delegatedProps = reactiveOmit(props, "class", "side", "showCloseButton")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+// A sheet from the bottom is a phone's: opening it focuses the sheet itself,
+// not its first field, so the keyboard does not pop up over it unasked
+function onOpenAutoFocus(event: Event) {
+  if (props.side !== "bottom") return
+  event.preventDefault()
+  ;(event.currentTarget as HTMLElement | null)?.focus({ preventScroll: true })
+}
 </script>
 
 <template>
@@ -51,6 +59,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           && 'data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b',
         props.class)"
       v-bind="{ ...$attrs, ...forwarded }"
+      @open-auto-focus="onOpenAutoFocus"
     >
       <slot />
 

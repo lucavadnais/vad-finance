@@ -13,6 +13,9 @@ const settingSchema = new mongoose.Schema(
     // The setup wizard shown to a new user (accounts, categories, budget,
     // import) was finished or skipped
     onboardingDone: { type: Boolean, default: false },
+    // The new features' announcements already shown (their keys, see the
+    // frontend's lib/announcements.ts): each is shown once
+    seenAnnouncements: { type: [String], default: [] },
   },
   { timestamps: true },
 );

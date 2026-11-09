@@ -12,6 +12,11 @@ import type {
   Projection,
   Settings,
   ProjectionInput,
+  SavingsGoal,
+  SavingsGoalInput,
+  DebtInput,
+  EmergencyFundInput,
+  SavingsMovementInput,
   Transaction,
   TransactionInput,
   TransactionPage,
@@ -156,6 +161,21 @@ export const api = {
   updateProjection: (id: string, body: ProjectionInput) =>
     request<Projection>(`/projections/${id}`, { method: 'PUT', body }),
   deleteProjection: (id: string) => request<null>(`/projections/${id}`, { method: 'DELETE' }),
+  getSavingsGoals: () => request<SavingsGoal[]>('/savings-goals'),
+  createSavingsGoal: (body: SavingsGoalInput | DebtInput) =>
+    request<SavingsGoal>('/savings-goals', { method: 'POST', body }),
+  updateSavingsGoal: (id: string, body: SavingsGoalInput | EmergencyFundInput | DebtInput) =>
+    request<SavingsGoal>(`/savings-goals/${id}`, { method: 'PUT', body }),
+  addPrepayment: (id: string, transaction: string) =>
+    request<SavingsGoal>(`/savings-goals/${id}/prepayments`, { method: 'POST', body: { transaction } }),
+  removePrepayment: (id: string, transaction: string) =>
+    request<SavingsGoal>(`/savings-goals/${id}/prepayments/${transaction}`, { method: 'DELETE' }),
+  deleteSavingsGoal: (id: string) => request<null>(`/savings-goals/${id}`, { method: 'DELETE' }),
+  // Puts money aside (amountCents > 0) or takes it back (< 0)
+  addSavingsMovement: (id: string, body: SavingsMovementInput) =>
+    request<SavingsGoal>(`/savings-goals/${id}/movements`, { method: 'POST', body }),
+  deleteSavingsMovement: (id: string, movementId: string) =>
+    request<SavingsGoal>(`/savings-goals/${id}/movements/${movementId}`, { method: 'DELETE' }),
   getSettings: () => request<Settings>('/settings'),
   updateSettings: (body: Partial<Settings>) => request<Settings>('/settings', { method: 'PUT', body }),
   importTransactions: (body: {
@@ -163,8 +183,7 @@ export const api = {
     transactions: ParsedTransaction[];
     allowDuplicates?: boolean;
     currentBalanceCents?: number;
-  }) =>
-    request<ImportSummary>('/transactions/import', { method: 'POST', body }),
+  }) => request<ImportSummary>('/transactions/import', { method: 'POST', body }),
 };
 
 // Image formats the backend accepts for account logos
@@ -185,6 +204,14 @@ const MASK_COMPACT = '•• $';
 export function formatCents(cents: number, currency = 'CAD') {
   if (amountsHidden.value) return MASK;
   return new Intl.NumberFormat('fr-CA', { style: 'currency', currency }).format(cents / 100);
+}
+
+// "1 000 $", "14 k$": an amount in whole dollars, short enough for a small
+// ring (compact from 10 000 $)
+export function formatCentsShort(cents: number, currency = 'CAD') {
+  if (amountsHidden.value) return MASK_COMPACT;
+  if (Math.abs(cents) >= 10000_00) return formatCentsCompact(cents, currency);
+  return new Intl.NumberFormat('fr-CA', { style: 'currency', currency, maximumFractionDigits: 0 }).format(cents / 100);
 }
 
 // "1,2 k$" style, for chart axes
@@ -211,6 +238,11 @@ export function toCents(value: string | number) {
   return Math.round(parseFloat(String(value).replace(/\s/g, '').replace(',', '.')) * 100);
 }
 
+// Keydown of a field taking an amount that cannot be negative: no minus sign
+export function noMinus(e: KeyboardEvent) {
+  if (e.key === '-') e.preventDefault();
+}
+
 // An amount to edit in a field, e.g. "36 291,28" (plain spaces, no currency)
 export function centsInput(cents: number) {
   return new Intl.NumberFormat('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -228,6 +260,12 @@ export function signedCents(value: string | number, kind?: CategoryKind) {
 
 // Dates are stored at midnight UTC: read and display them in UTC so the
 // day does not shift in the local time zone
+// Today (or `years` from now), the user's day, as a date field's value
+export function todayInput(years = 0) {
+  const d = new Date();
+  return new Date(Date.UTC(d.getFullYear() + years, d.getMonth(), d.getDate())).toISOString().slice(0, 10);
+}
+
 export function toDateInput(date: string) {
   return new Date(date).toISOString().slice(0, 10);
 }

@@ -34,13 +34,13 @@ docker compose up --build
 
 #### Base locale ou MongoDB Atlas
 
-Par défaut, l'app utilise la base locale (le conteneur `mongo`). Pour utiliser un cluster MongoDB Atlas, ajoutez son adresse dans le fichier `.env` à la racine, puis redémarrez les conteneurs (`docker compose up -d`, ou **Dev Containers: Rebuild Container** dans VS Code) :
+Par défaut, l'app utilise la base locale (le conteneur `mongo`). Pour utiliser un cluster MongoDB Atlas, ajoutez son adresse dans le fichier `.env` à la racine, puis redémarrez le conteneur `app` (`docker compose restart app`) :
 
 ```bash
 MONGO_URL=mongodb+srv://utilisateur:mot-de-passe@cluster0.xxxxx.mongodb.net/finance?retryWrites=true&w=majority
 ```
 
-Commentez ou retirez la ligne pour revenir à la base locale. Au démarrage, le backend affiche la base utilisée (`Connected to MongoDB: …`). Dans Atlas, autorisez votre adresse IP (**Network Access**) ; gardez `/finance` dans l'adresse, sinon la base s'appelle `test`. Un caractère spécial dans le mot de passe (`@`, `:`, `/`…) doit être encodé (`@` → `%40`).
+Commentez ou retirez la ligne, puis redémarrez, pour revenir à la base locale. Le backend lit lui-même le fichier `.env` à chaque démarrage : une variable `MONGO_URL` définie ailleurs (Windows, `docker-compose.yml`) n'est pas utilisée. Au démarrage, le backend affiche la base utilisée (`Connected to MongoDB: …`). Dans Atlas, autorisez votre adresse IP (**Network Access**) ; gardez `/finance` dans l'adresse, sinon la base s'appelle `test`. Un caractère spécial dans le mot de passe (`@`, `:`, `/`…) doit être encodé (`@` → `%40`).
 
 Les dépendances npm sont installées automatiquement à chaque démarrage du conteneur, et le code est rechargé à chaque modification.
 
@@ -54,7 +54,7 @@ Chaque utilisateur se connecte avec son compte Google et ne voit que ses propres
    ```bash
    GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
    ```
-4. Redémarrer les conteneurs : `docker compose up -d` (VS Code : **Dev Containers: Rebuild Container**).
+4. Redémarrer le conteneur `app` : `docker compose restart app`.
 
 Le backend vérifie le jeton remis par Google (signature, destinataire, expiration), puis ouvre une session de 30 jours, prolongée à l'usage : un cookie `httpOnly` (illisible par les scripts de la page), `SameSite=Lax` et `Secure` en HTTPS. Seule l'empreinte SHA-256 du jeton de session est enregistrée en base.
 
@@ -68,7 +68,7 @@ Deux pages publiques, lisibles sans connexion et liées depuis la page de connex
 
 #### Utilisateur de test (local)
 
-Avec `DEV_LOGIN=1` dans le fichier `.env`, la page de connexion affiche « Se connecter comme utilisateur de test » : connexion sans Google avec l’utilisateur `test@example.com`, créé sans données à sa première connexion. Redémarrez les conteneurs après l'avoir ajouté. À n'activer que sur votre machine : n'importe qui ouvrant l'application (y compris par Tailscale) pourrait l'utiliser.
+Avec `DEV_LOGIN=1` dans le fichier `.env`, la page de connexion affiche « Se connecter comme utilisateur de test » : connexion sans Google avec l’utilisateur `test@example.com`, créé sans données à sa première connexion. Redémarrez le conteneur `app` après l'avoir ajouté. À n'activer que sur votre machine : n'importe qui ouvrant l'application (y compris par Tailscale) pourrait l'utiliser.
 
 ### Commandes utiles
 

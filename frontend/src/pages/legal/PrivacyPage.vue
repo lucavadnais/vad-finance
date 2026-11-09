@@ -25,7 +25,7 @@ import LegalPage from '@/components/LegalPage.vue';
       <li>
         <strong>Les données que vous entrez ou importez</strong> : vos comptes (nom, type, solde, image facultative),
         vos transactions (date, description, montant, catégorie), saisies à la main ou importées d'un relevé CSV, vos
-        catégories, groupes, prévisions et paramètres.
+        catégories, groupes, prévisions, objectifs d'épargne et paramètres.
       </li>
       <li><strong>Un cookie de session</strong>, qui vous garde connecté (voir la section 3).</li>
     </ul>

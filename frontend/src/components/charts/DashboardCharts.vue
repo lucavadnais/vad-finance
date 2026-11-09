@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// The phone's analysis tab: trends over the period in the tab's bar (this
+// The phone's analysis page (opened from the home tab's total, `back` going
+// back): trends over the period in the tab's bar (this
 // week, a month at a time, or several months). A computer
 // spreads them over other cards: the balance in the accounts' total, the
 // spending by category in the spending card.
@@ -18,6 +19,7 @@ import {
   selectedExpenses,
 } from '@/lib/chartData';
 import { addMonths, currentMonth, sameMonth } from '@/lib/projections';
+import { withoutHidden } from '@/lib/savings';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { useTrendPeriod } from '@/composables/useTrendPeriod';
 import { Card } from '@/components/ui/card';
@@ -33,6 +35,7 @@ const props = defineProps<{
   categories: Category[];
   groups: CategoryGroup[];
 }>();
+const emit = defineEmits<{ back: [] }>();
 
 // Picked in the tab's bar. "Mois par mois" shows one month at a time, stepped
 // with arrows, like an account's page
@@ -50,7 +53,7 @@ const scoped = computed(() =>
 );
 
 // Count grouped categories under their group (e.g. "Milieu de vie")
-const { categoryColors } = useFinanceData();
+const { categoryColors, savingsGoals } = useFinanceData();
 const grouped = ref(false);
 const expenses = computed(() =>
   expenseSeries(scoped.value, props.categories, props.groups, categoryColors.value, grouped.value, from.value),
@@ -65,18 +68,28 @@ const selectedTransactions = computed(() =>
   selectedExpenses(scoped.value, selection.value, expenses.value.keyOf, from.value),
 );
 
-// The total balance after each day (the accounts counted in the total, summed)
+// The total balance after each day (the accounts counted in the total,
+// summed; the goals hidden from it left out, lib/savings.ts)
 const balance = computed(() => {
   const accounts = inTotal(props.accounts);
-  return balanceOverTime(scoped.value, accounts, accountSeries(accounts), from.value, now.value);
+  const rows = balanceOverTime(scoped.value, accounts, accountSeries(accounts), from.value, now.value);
+  return withoutHidden(rows, savingsGoals.value);
 });
 </script>
 
 <template>
   <!-- Flat in its tab, like the spending tab -->
   <Card class="rounded-none border-0 bg-transparent py-0 shadow-none">
-    <!-- The page's bar, with its period (and its month) -->
-    <PageBar v-model:period="period" v-model:month="month" title="Analyse" :periods="PERIODS" up-to-now />
+    <!-- The page's bar: back, like an account's page, and its period (and its
+         month) -->
+    <PageBar
+      v-model:period="period"
+      v-model:month="month"
+      back
+      :periods="PERIODS"
+      up-to-now
+      @back="emit('back')"
+    />
     <!-- The balance first, then the spending -->
     <BalanceChart :rows="balance" />
     <ExpensesChart

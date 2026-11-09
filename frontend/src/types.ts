@@ -97,6 +97,124 @@ export interface Projection {
 
 export type ProjectionInput = Omit<Projection, '_id'>;
 
+// Money put aside in a goal (amountCents > 0), or taken back (< 0)
+export interface SavingsMovement {
+  _id: string;
+  amountCents: number;
+  // ISO date
+  date: string;
+  note: string;
+}
+
+export type SavingsMovementInput = Omit<SavingsMovement, '_id'>;
+
+// A virtual safe: a share of the money kept for something, while it stays in
+// the accounts. It holds the sum of its movements, or its account's balance
+// (see goalHeldCents). The emergency fund is one of them, always first.
+// A debt's yearly interest rate in %, from `from` (ISO date, null = from the
+// start) until the next rate's day
+export interface InterestRate {
+  ratePercent: number;
+  from: string | null;
+}
+
+// A debt's payment: the transactions of this account with this description
+// (compared by paymentKey, lib/debts.ts)
+export interface PaymentMatch {
+  account: string;
+  description: string;
+}
+
+// How often a debt's additional payments come back: every `interval` weeks,
+// months or years
+export interface ExtraRecurrence {
+  recurrence: Exclude<Recurrence, 'once'>;
+  interval: number;
+}
+
+export interface SavingsGoal {
+  _id: string;
+  name: string;
+  emergency: boolean;
+  // 'debt': a loan paid off, following the payments picked (lib/debts.ts);
+  // its savings fields (target, account, movements) are left empty
+  kind: 'savings' | 'debt';
+  // Null for the emergency fund: the app computes it (lib/savings.ts)
+  targetCents: number | null;
+  // To reach by this day (ISO date), null = whenever
+  dueDate: string | null;
+  // Savings only: left out of the total of the accounts (lib/savings.ts)
+  hiddenFromTotal: boolean;
+  // Its balance is what the goal holds; the movements are then ignored
+  account: string | null;
+  movements: SavingsMovement[];
+  // Emergency fund only, for its computed target (lib/savings.ts): months of
+  // essential spending, value and age of the home owned, monthly rental
+  // expenses
+  // The situation picked (FUND_SITUATIONS' key), null = months typed in
+  fundSituation: string | null;
+  fundMonths: number;
+  homeValueCents: number;
+  // Year the home was built, null = unknown
+  homeBuiltYear: number | null;
+  rentalExpensesCents: number;
+  // Emergency fund only: the essential expenses, ids of expense groups (their
+  // categories follow them) and of categories without a group (see isEssential)
+  essentials: string[];
+  // Debt only: what was left to pay on debtStartDate (ISO date); the
+  // payments after it lower it
+  debtStartCents: number | null;
+  debtStartDate: string | null;
+  // Debt only: the amount borrowed, when known (null = worked out from the
+  // payments, lib/debts.ts)
+  loanCents: number | null;
+  interestRates: InterestRate[];
+  // Debt only: the usual payment's transactions
+  paymentMatches: PaymentMatch[];
+  // Debt only: additional payments' transactions, how often they come back
+  // (null = like the usual payment; the app does not offer another yet), and
+  // how many were still planned on extraCountFrom (ISO date; null = until the
+  // end)
+  extraMatches: PaymentMatch[];
+  extraRecurrence: ExtraRecurrence | null;
+  extraCount: number | null;
+  extraCountFrom: string | null;
+  // Debt only: prepayments, ids of the transactions picked
+  prepayments: string[];
+  // ISO date: when the time to the due date starts
+  createdAt: string;
+}
+
+export type SavingsGoalInput = Pick<SavingsGoal, 'name' | 'targetCents' | 'dueDate' | 'account' | 'hiddenFromTotal'>;
+
+// A debt (POST /savings-goals with kind 'debt', or PUT)
+export type DebtInput = Pick<
+  SavingsGoal,
+  | 'name'
+  | 'debtStartCents'
+  | 'debtStartDate'
+  | 'loanCents'
+  | 'interestRates'
+  | 'paymentMatches'
+  | 'extraRecurrence'
+  | 'extraCount'
+  | 'extraMatches'
+> & { kind: 'debt' };
+
+// The emergency fund's settings (PUT /savings-goals/:id)
+export type EmergencyFundInput = Pick<
+  SavingsGoal,
+  | 'targetCents'
+  | 'account'
+  | 'fundSituation'
+  | 'fundMonths'
+  | 'homeValueCents'
+  | 'homeBuiltYear'
+  | 'rentalExpensesCents'
+  | 'essentials'
+  | 'hiddenFromTotal'
+>;
+
 export interface TransactionInput {
   account: string;
   category?: string | null;
@@ -188,4 +306,6 @@ export interface Settings {
   // The setup wizard was finished or skipped (OnboardingPage). Unknown until
   // the settings are loaded
   onboardingDone?: boolean;
+  // The announcements already shown (lib/announcements.ts)
+  seenAnnouncements?: string[];
 }

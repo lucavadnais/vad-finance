@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=22.9"
+  },
   "scripts": {
-    "dev": "nodemon --legacy-watch --watch src src/index.js",
-    "start": "node src/index.js"
+    "dev": "nodemon --legacy-watch --watch src --exec \"node --env-file-if-exists=../.env\" src/index.js",
+    "start": "node --env-file-if-exists=../.env src/index.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

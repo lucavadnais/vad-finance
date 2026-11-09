@@ -199,14 +199,6 @@ export const inTotal = (accounts: Account[]) => accounts.filter((a) => !a.exclud
 
 export const TOTAL_SERIES: Series = { key: 'total', label: 'Total', color: 'var(--series-1)' };
 
-// The total balance over the last `days` days, and how much it moved: the
-// curve under the total of the accounts (the phone's home, the computer's card)
-export function recentBalance(transactions: Transaction[], accounts: Account[], days = 30) {
-  const from = new Date(Date.now() - days * 86_400_000);
-  const values = balanceOverTime(transactions, accounts, accountSeries(accounts), from).map((r) => Number(r.total));
-  return { values, changeCents: (values.at(-1) ?? 0) - (values[0] ?? 0) };
-}
-
 // Balance after each day with transactions, per account and in total, for
 // `accounts` only (the transactions of the others are left out). Starts at the
 // balance on the first day of the period (or the day before the first

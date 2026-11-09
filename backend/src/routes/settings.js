@@ -13,6 +13,10 @@ router.put('/', async (req, res) => {
   if (req.body.budgetBufferCents !== undefined) settings.budgetBufferCents = req.body.budgetBufferCents;
   if (req.body.chartAxes !== undefined) settings.chartAxes = req.body.chartAxes;
   if (req.body.onboardingDone !== undefined) settings.onboardingDone = req.body.onboardingDone;
+  // A few short keys, no more
+  const seen = req.body.seenAnnouncements;
+  if (Array.isArray(seen) && seen.length <= 50 && seen.every((k) => typeof k === 'string' && k.length <= 50))
+    settings.seenAnnouncements = [...new Set(seen)];
   await settings.save();
   res.json(settings);
 });

@@ -117,18 +117,19 @@ function onOpenChange(open: boolean) {
   if (!open && !saving.value) emit('cancel');
 }
 
+const isTransfer = (r: { category: string | null }) => r.category === TRANSFER;
+// The import waits for every transfer checked to have its other account, and
+// for the balance typed (if any) to be a number
+const valid = computed(
+  () =>
+    !rows.value.some(
+      (r, i) => selected.value[i] && isTransfer(r) && (!r.transferAccount || r.transferAccount === accountId.value),
+    ) && !Number.isNaN(currentCents.value),
+);
+
 async function submit() {
-  if (!account.value) return;
+  if (!account.value || !valid.value) return;
   const chosen = rows.value.filter((_, i) => selected.value[i]);
-  const isTransfer = (r: (typeof chosen)[number]) => r.category === TRANSFER;
-  if (chosen.some((r) => isTransfer(r) && (!r.transferAccount || r.transferAccount === accountId.value))) {
-    error.value = "Choisissez l'autre compte de chaque transfert";
-    return;
-  }
-  if (Number.isNaN(currentCents.value)) {
-    error.value = 'Solde invalide';
-    return;
-  }
   if (firstImport.value && currentCents.value === null && !balanceWarned.value) {
     balanceWarned.value = true;
     document.getElementById('import-current-balance')?.focus();
@@ -284,7 +285,7 @@ async function submit() {
 
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')"> Annuler </Button>
-          <Button type="submit" :disabled="!account || saving || checking || selectedCount === 0">
+          <Button type="submit" :disabled="!account || saving || checking || selectedCount === 0 || !valid">
             {{
               saving
                 ? 'Import…'

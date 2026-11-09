@@ -4,7 +4,7 @@
 import type { Category, CategoryKind, Projection, ProjectionInput, Recurrence } from '@/types';
 import { computed, ref, watch } from 'vue';
 import { api, toCents, toDateInput } from '@/api';
-import { PROJECTION_KINDS, RECURRENCE_UNITS, RECURRENCES } from '@/lib/labels';
+import { PROJECTION_KINDS, RECURRENCES } from '@/lib/labels';
 import { Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { DialogBody, DialogFooter } from '@/components/ui/dialog';
@@ -15,6 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CategorySelect from './CategorySelect.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import DatePicker from './DatePicker.vue';
+import IntervalInput from './IntervalInput.vue';
 import InfoTooltip from './InfoTooltip.vue';
 import OptionSelect from './OptionSelect.vue';
 
@@ -67,11 +68,6 @@ watch(hasEnd, (on) => {
   if (on && !endDate.value) endDate.value = startDate.value;
 });
 
-const unit = computed(() => {
-  if (recurrence.value === 'once') return '';
-  const [one, many] = RECURRENCE_UNITS[recurrence.value];
-  return Number(interval.value) > 1 ? many : one;
-});
 const startDay = computed(() => Number(startDate.value?.slice(8, 10)));
 
 // Only the categories of the same kind: expense ones for an expense
@@ -85,28 +81,27 @@ watch(category, (id) => {
   if (c && !name.value.trim()) name.value = c.name;
 });
 
+const amountCents = computed(() => Math.abs(toCents(amount.value)));
+const every = computed(() => (recurrence.value === 'once' ? 1 : Number(interval.value)));
+// An amount, an interval from 1 to 99 and a date: the button waits for them
+const valid = computed(
+  () =>
+    !Number.isNaN(amountCents.value) &&
+    Number.isInteger(every.value) &&
+    every.value >= 1 &&
+    every.value <= 99 &&
+    !!startDate.value,
+);
+
 async function submit() {
-  const amountCents = Math.abs(toCents(amount.value));
-  const every = recurrence.value === 'once' ? 1 : Number(interval.value);
-  if (Number.isNaN(amountCents)) {
-    error.value = 'Montant invalide';
-    return;
-  }
-  if (!Number.isInteger(every) || every < 1 || every > 99) {
-    error.value = 'L’intervalle doit être entre 1 et 99';
-    return;
-  }
-  if (!startDate.value) {
-    error.value = 'Choisissez une date';
-    return;
-  }
+  if (!valid.value) return;
   const body: ProjectionInput = {
     name: name.value,
     kind: kind.value,
-    amountCents,
+    amountCents: amountCents.value,
     recurrence: recurrence.value,
-    interval: every,
-    startDate: startDate.value,
+    interval: every.value,
+    startDate: startDate.value!,
     endDate: recurrence.value !== 'once' && hasEnd.value ? (endDate.value ?? null) : null,
     category: category.value,
   };
@@ -179,11 +174,7 @@ async function submit() {
         </div>
         <div v-if="recurrence !== 'once'" class="flex flex-col gap-2">
           <Label for="projection-interval">Fréquence</Label>
-          <div class="flex items-center gap-2">
-            <span class="text-sm">{{ Number(interval) > 1 ? 'Aux' : 'Chaque' }}</span>
-            <Input id="projection-interval" v-model="interval" type="number" min="1" max="99" class="w-16" required />
-            <span class="text-sm">{{ unit }}</span>
-          </div>
+          <IntervalInput id="projection-interval" v-model="interval" :recurrence="recurrence" />
         </div>
       </div>
 
@@ -219,7 +210,7 @@ async function submit() {
         </Button>
       </ConfirmDialog>
       <Button type="button" variant="outline" :disabled="saving" @click="emit('cancel')"> Annuler </Button>
-      <Button type="submit" :disabled="saving">
+      <Button type="submit" :disabled="saving || !valid">
         {{ saving ? 'Enregistrement…' : projection ? 'Enregistrer' : 'Ajouter' }}
       </Button>
     </DialogFooter>

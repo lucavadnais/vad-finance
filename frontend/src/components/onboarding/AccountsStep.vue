@@ -3,7 +3,7 @@
 // deleted) through the usual account dialog, which also adds more. "Suivant"
 // (submit) needs at least one account: the rest of the app (import,
 // transactions) depends on it.
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Pencil, Plus } from '@lucide/vue';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { ACCOUNT_TYPES } from '@/lib/labels';
@@ -20,13 +20,13 @@ async function onCreated() {
   await refresh();
 }
 
+// "Suivant" waits for a first account
+const ready = computed(() => accounts.value.length > 0);
 // Called on "Suivant": false keeps the wizard on this step
 async function submit() {
-  if (accounts.value.length > 0) return true;
-  error.value = 'Ajoutez au moins un compte pour continuer.';
-  return false;
+  return ready.value;
 }
-defineExpose({ submit });
+defineExpose({ submit, ready });
 </script>
 
 <template>

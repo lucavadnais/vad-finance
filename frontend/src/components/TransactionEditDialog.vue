@@ -6,14 +6,7 @@ import { computed, ref, watch } from 'vue';
 import { Link2, Unlink } from '@lucide/vue';
 import { api, signedCents, toDateInput } from '@/api';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AccountSelect from './AccountSelect.vue';
@@ -85,18 +78,17 @@ async function run(action: () => Promise<unknown>) {
   }
 }
 
+// An amount, and a transfer's other account: the button waits for them
+const valid = computed(
+  () =>
+    !Number.isNaN(signedCents(form.value.amount, categoryKind.value)) &&
+    (!isTransfer.value || !!form.value.transferAccount),
+);
+
 function save() {
   const t = props.transaction;
-  if (!t) return;
+  if (!t || !valid.value) return;
   const amountCents = signedCents(form.value.amount, categoryKind.value);
-  if (Number.isNaN(amountCents)) {
-    error.value = 'Montant invalide';
-    return;
-  }
-  if (isTransfer.value && !form.value.transferAccount) {
-    error.value = "Choisissez l'autre compte du transfert";
-    return;
-  }
   run(() =>
     api.updateTransaction(t._id, {
       account: form.value.account,
@@ -182,7 +174,7 @@ function unlink() {
 
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)">Annuler</Button>
-          <Button type="submit" :disabled="saving">{{ saving ? 'Enregistrement…' : 'Enregistrer' }}</Button>
+          <Button type="submit" :disabled="saving || !valid">{{ saving ? 'Enregistrement…' : 'Enregistrer' }}</Button>
         </DialogFooter>
       </form>
     </DialogContent>

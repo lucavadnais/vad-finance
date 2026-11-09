@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { FRENCH } from '../db.js';
 import Account from '../models/Account.js';
+import SavingsGoal from '../models/SavingsGoal.js';
 import Transaction from '../models/Transaction.js';
 
 const router = Router();
@@ -169,7 +170,8 @@ async function moveTransactions(from, to) {
 
 // Deletes the account. Its transactions are deleted with it, unless
 // ?moveTo=<account id> moves them there (&moveInitialBalance=1 also adds its
-// initial balance to that account's, so the total stays the same).
+// initial balance to that account's, so the total stays the same). Its savings
+// goals follow its transactions, or go back to an amount entered by hand.
 router.delete('/:id', async (req, res) => {
   const user = req.userId;
   const account = await Account.findOne({ _id: req.params.id, user });
@@ -183,6 +185,9 @@ router.delete('/:id', async (req, res) => {
       throw httpError(400, `Le compte de destination doit être en ${account.currency}`);
     }
     await moveTransactions(account, target);
+    // An account follows one goal at most: one already on the target keeps it
+    const targetTaken = await SavingsGoal.exists({ user, account: target._id });
+    await SavingsGoal.updateMany({ user, account: account._id }, { account: targetTaken ? null : target._id });
     await Account.deleteOne({ _id: account._id, user });
     if (req.query.moveInitialBalance === '1') {
       await Account.updateOne(
@@ -200,6 +205,7 @@ router.delete('/:id', async (req, res) => {
   await Transaction.deleteMany({ user, autoCreated: true, transferPeer: { $in: removed.map((t) => t._id) } });
   await Transaction.updateMany({ user, transferPeer: { $in: removed.map((t) => t._id) } }, { transferPeer: null });
   await Transaction.updateMany({ user, transferAccount: account._id }, { transferAccount: null });
+  await SavingsGoal.updateMany({ user, account: account._id }, { account: null });
   await Account.deleteOne({ _id: account._id, user });
   res.status(204).end();
 });

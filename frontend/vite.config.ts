@@ -17,6 +17,9 @@ export default defineConfig({
     // only (npm run build, then npm run preview)
     VitePWA({
       registerType: 'autoUpdate',
+      // Registered by the app itself (src/registerServiceWorker.ts), which also
+      // checks for a new version when it comes back to the screen
+      injectRegister: false,
       pwaAssets: { config: true },
       manifest: {
         name: 'VAD finances',

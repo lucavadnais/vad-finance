@@ -9,6 +9,9 @@ export const router = createRouter({
     { path: '/', name: 'home', component: HomePage, meta: { title: 'Accueil' } },
     { path: '/spending', name: 'spending', component: HomePage, meta: { title: 'Dépenses' } },
     { path: '/budget', name: 'budget', component: HomePage, meta: { title: 'Budget' } },
+    { path: '/goals', name: 'goals', component: HomePage, meta: { title: 'Objectifs' } },
+    // Phone: a page of its own, opened from the home tab's total, with a back
+    // button and no tab bar
     { path: '/analysis', name: 'analysis', component: HomePage, meta: { title: 'Analyse' } },
     // Charts pull in Unovis: in their own chunk
     {

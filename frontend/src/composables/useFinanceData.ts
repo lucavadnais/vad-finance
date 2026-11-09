@@ -5,6 +5,7 @@ import type {
   CategoryGroup,
   DuplicatePair,
   Projection,
+  SavingsGoal,
   Settings,
   Transaction,
   TransferCandidate,
@@ -21,6 +22,7 @@ const transactions = ref<Transaction[]>([]);
 // Bumped on each refresh so the transactions table reloads its page
 const dataVersion = ref(0);
 const projections = ref<Projection[]>([]);
+const savingsGoals = ref<SavingsGoal[]>([]);
 const transferCandidates = ref<TransferCandidate[]>([]);
 const duplicatePairs = ref<DuplicatePair[]>([]);
 // onboardingDone stays unknown until loaded (App.vue waits for it)
@@ -31,7 +33,7 @@ const categoryColors = computed(() => colorsOf(categories.value, categoryGroups.
 
 async function refresh() {
   try {
-    const [a, c, g, t, tc, d, p, s] = await Promise.all([
+    const [a, c, g, t, tc, d, p, sg, s] = await Promise.all([
       api.getAccounts(),
       api.getCategories(),
       api.getCategoryGroups(),
@@ -39,6 +41,7 @@ async function refresh() {
       api.getTransferCandidates(),
       api.getDuplicates(),
       api.getProjections(),
+      api.getSavingsGoals(),
       api.getSettings(),
     ]);
     accounts.value = a;
@@ -49,11 +52,20 @@ async function refresh() {
     transferCandidates.value = tc;
     duplicatePairs.value = d;
     projections.value = p;
+    savingsGoals.value = sg;
     settings.value = s;
     error.value = '';
   } catch (err) {
     error.value = (err as Error).message;
   }
+}
+
+// A goal as the API returned it after a change, in place: no full refresh
+// for what only touches the goals
+function putGoal(goal: SavingsGoal) {
+  const i = savingsGoals.value.findIndex((g) => g._id === goal._id);
+  if (i === -1) savingsGoals.value = [...savingsGoals.value, goal];
+  else savingsGoals.value = savingsGoals.value.map((g, j) => (j === i ? goal : g));
 }
 
 function setError(message: string) {
@@ -71,9 +83,11 @@ export function useFinanceData() {
     transferCandidates,
     duplicatePairs,
     projections,
+    savingsGoals,
     settings,
     error,
     refresh,
+    putGoal,
     setError,
   };
 }

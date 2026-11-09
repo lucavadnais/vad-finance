@@ -4,6 +4,7 @@ import Account from '../models/Account.js';
 import Category from '../models/Category.js';
 import CategoryGroup from '../models/CategoryGroup.js';
 import Projection from '../models/Projection.js';
+import SavingsGoal from '../models/SavingsGoal.js';
 import Session from '../models/Session.js';
 import Setting from '../models/Setting.js';
 import Transaction from '../models/Transaction.js';
@@ -15,7 +16,7 @@ const router = Router();
 // last: if a step fails, they can still sign in and try again.
 router.delete('/me', async (req, res) => {
   const user = req.userId;
-  for (const Model of [Transaction, Projection, Category, CategoryGroup, Account, Setting]) {
+  for (const Model of [Transaction, Projection, SavingsGoal, Category, CategoryGroup, Account, Setting]) {
     await Model.deleteMany({ user });
   }
   await Session.deleteMany({ user });

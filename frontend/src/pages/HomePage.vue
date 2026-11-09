@@ -10,6 +10,7 @@ import { useSelectedMonth, useSelectedPeriod } from '@/composables/useSelectedMo
 import { duplicateKey, useDuplicateReview } from '@/composables/useDuplicateReview';
 import { useTransferReview } from '@/composables/useTransferReview';
 import { TOTAL_SERIES, accountSeries, balanceOverTime, inTotal, periodStart } from '@/lib/chartData';
+import { visibleTotal, withoutHidden } from '@/lib/savings';
 import { addMonths, currentMonth, sameMonth } from '@/lib/projections';
 import { useMediaQuery } from '@vueuse/core';
 import type { Row } from '@/lib/chartData';
@@ -29,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TrendChart from '@/components/TrendChart.vue';
 import SeriesTable from '@/components/charts/SeriesTable.vue';
 import ProjectionMonth from '@/components/ProjectionMonth.vue';
+import SavingsCard from '@/components/SavingsCard.vue';
 import SpendInsights from '@/components/SpendInsights.vue';
 import TransactionsTable from '@/components/TransactionsTable.vue';
 import TransferDialog from '@/components/TransferDialog.vue';
@@ -40,11 +42,13 @@ const {
   accounts,
   categories,
   categoryGroups,
+  categoryColors,
   transactions,
   dataVersion,
   transferCandidates,
   duplicatePairs,
   projections,
+  savingsGoals,
   refresh,
   setError,
 } = useFinanceData();
@@ -89,7 +93,10 @@ watch(selected, (a) => {
   if (!a && selectedId.value !== 'all' && accounts.value.length > 0) selectedId.value = 'all';
 });
 
-const totalCents = computed(() => shownAccounts.value.reduce((sum, a) => sum + a.balanceCents, 0));
+// All of them: less what the goals hidden from the total hold
+const totalCents = computed(() =>
+  selected.value ? selected.value.balanceCents : visibleTotal(accounts.value, savingsGoals.value),
+);
 // Under it, how it moved over the period of the page's header, as a curve or
 // a table. "Mois par mois": over the month picked beside it (a past one up to
 // its last day, nothing for one to come)
@@ -102,7 +109,7 @@ const balanceRows = computed(() => {
   const now = currentMonth();
   if (byMonth && monthStart(m) > monthStart(now)) return [];
   const end = byMonth && !sameMonth(m, now) ? monthStart(addMonths(m, 1)) : null;
-  return balanceOverTime(
+  const rows = balanceOverTime(
     transactions.value.filter(
       (t) => (!selected.value || t.account?._id === selected.value._id) && (!end || new Date(t.date) < end),
     ),
@@ -111,6 +118,7 @@ const balanceRows = computed(() => {
     byMonth ? monthStart(m) : periodStart(period.value),
     end ? new Date(end.getTime() - 1) : undefined,
   );
+  return selected.value ? rows : withoutHidden(rows, savingsGoals.value);
 });
 const balanceTimes = computed(() => balanceRows.value.map((r) => r.t));
 const balanceTotals = computed(() => balanceRows.value.map((r) => Number(r.total ?? 0)));
@@ -127,18 +135,24 @@ const budgetMonth = computed({
 
 // On a phone, one tab at a time, picked in the bottom tab bar: the home (the
 // accounts card taken apart), the spending (the month's spending, the import
-// and the transactions, all flat), the budget and the analysis. From tablet
-// up, every card shows. Each tab has its address (router.ts): the tab follows
-// it, so the back button and a reload work as with pages.
-const TABS: HomeTab[] = ['home', 'spending', 'budget', 'analysis'];
+// and the transactions, all flat), the budget and the goals. The analysis is
+// a page of its own, opened from the home tab's total: no tab bar, a back
+// button instead, like an account's page. From tablet up, every card shows.
+// Each has its address (router.ts): the view follows it, so the back button
+// and a reload work as with pages.
+type View = HomeTab | 'analysis';
+const VIEWS: View[] = ['home', 'spending', 'budget', 'goals', 'analysis'];
 const route = useRoute();
 const router = useRouter();
-const tab = computed<HomeTab>({
-  get: () => TABS.find((t) => t === route.name) ?? 'home',
-  set: (t) => router.push({ name: t }),
-});
-const onPhone = (t: HomeTab) => tab.value !== t && 'max-md:hidden';
-watch(tab, () => window.scrollTo({ top: 0 }));
+const view = computed<View>(() => VIEWS.find((v) => v === route.name) ?? 'home');
+const open = (v: View) => router.push({ name: v });
+const onPhone = (v: View) => view.value !== v && 'max-md:hidden';
+watch(view, () => window.scrollTo({ top: 0 }));
+// Back from the analysis: where it was opened from, or home
+function back() {
+  if (router.options.history.state.back) router.back();
+  else router.push({ name: 'home' });
+}
 // Phone: the add sheet, opened by the "+" of the tab bar
 const addOpen = ref(false);
 const tabAlerts = computed(() => ({
@@ -166,7 +180,7 @@ const tabAlerts = computed(() => ({
         :categories="categories"
         class="md:hidden"
         :class="onPhone('home')"
-        @open="tab = $event"
+        @open="open"
         @changed="refresh"
         @error="setError"
       />
@@ -363,7 +377,7 @@ const tabAlerts = computed(() => ({
         :categories="categories"
         class="max-md:order-first"
         :class="onPhone('spending')"
-        @open-budget="tab = 'budget'"
+        @open-budget="open('budget')"
       />
       <ProjectionMonth
         v-model="budgetMonth"
@@ -371,6 +385,19 @@ const tabAlerts = computed(() => ({
         :projections="projections"
         :transactions="transactions"
         :categories="categories"
+        @changed="refresh"
+        @error="setError"
+      />
+      <!-- Phone: mounted on its tab only, its computing (the fund, the debts)
+           left out of the others -->
+      <SavingsCard
+        v-if="!phone || view === 'goals'"
+        :accounts="accounts"
+        :categories="categories"
+        :groups="categoryGroups"
+        :transactions="transactions"
+        :goals="savingsGoals"
+        :colors="categoryColors"
         @changed="refresh"
         @error="setError"
       />
@@ -384,12 +411,18 @@ const tabAlerts = computed(() => ({
         :accounts="accounts"
         :categories="categories"
         :groups="categoryGroups"
+        @back="back"
       />
     </div>
 
-    <!-- Opened after an addition that brought new pairs, or from a transaction's
-         icon. Rendered on the body: no room taken in the grid. -->
-    <MobileTabBar v-model="tab" :alerts="tabAlerts" @add="addOpen = true" />
+    <!-- Not on the analysis, a page of its own -->
+    <MobileTabBar
+      v-if="view !== 'analysis'"
+      :model-value="view"
+      :alerts="tabAlerts"
+      @update:model-value="open"
+      @add="addOpen = true"
+    />
     <MobileAddSheet
       v-model:open="addOpen"
       :accounts="accounts"
@@ -399,6 +432,8 @@ const tabAlerts = computed(() => ({
       @error="setError"
     />
 
+    <!-- Opened after an addition that brought new pairs, or from a transaction's
+         icon. Rendered on the body: no room taken in the grid. -->
     <TransferDialog @changed="refresh" @error="setError" />
     <DuplicateDialog @changed="refresh" @error="setError" />
   </div>

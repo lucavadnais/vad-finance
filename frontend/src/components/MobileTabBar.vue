@@ -1,5 +1,5 @@
 <script lang="ts">
-export type HomeTab = 'home' | 'spending' | 'budget' | 'analysis';
+export type HomeTab = 'home' | 'spending' | 'budget' | 'goals';
 </script>
 
 <script setup lang="ts">
@@ -9,7 +9,7 @@ export type HomeTab = 'home' | 'spending' | 'budget' | 'analysis';
 import type { Component } from 'vue';
 import { computed, ref } from 'vue';
 import { useEventListener } from '@vueuse/core';
-import { ArrowLeftRight, ChartColumn, House, PiggyBank, Plus } from '@lucide/vue';
+import { ArrowLeftRight, House, PiggyBank, Plus, Target } from '@lucide/vue';
 
 // A red dot on a tab with something to review (transfers, duplicates)
 defineProps<{ alerts?: Partial<Record<HomeTab, boolean>> }>();
@@ -20,7 +20,7 @@ const TABS: { value: HomeTab; label: string; icon: Component }[] = [
   { value: 'home', label: 'Accueil', icon: House },
   { value: 'spending', label: 'Dépenses', icon: ArrowLeftRight },
   { value: 'budget', label: 'Budget', icon: PiggyBank },
-  { value: 'analysis', label: 'Analyse', icon: ChartColumn },
+  { value: 'goals', label: 'Objectifs', icon: Target },
 ];
 // Out of the way while scrolling down (reading), back as soon as scrolling up
 // or near the top. A few pixels of slack, so a finger's jitter does not toggle it

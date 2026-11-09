@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ChevronLeft, Landmark, Lightbulb, PiggyBank, Tags, Upload } from '@lucide/vue';
 import { api } from '@/api';
+import { ANNOUNCEMENTS } from '@/lib/announcements';
 import { useAuth } from '@/composables/useAuth';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { cn } from '@/lib/utils';
@@ -68,8 +69,9 @@ const step = computed(() => (index.value >= 0 ? STEPS[index.value] : null));
 const last = computed(() => index.value === STEPS.length - 1);
 watch(index, () => window.scrollTo({ top: 0 }));
 
-// The current step's component, when it saves on "Suivant"
-const current = ref<{ submit: () => Promise<boolean> } | null>(null);
+// The current step's component, when it saves on "Suivant"; `ready` false
+// while it is incomplete, "Suivant" waiting for it
+const current = ref<{ submit: () => Promise<boolean>; ready?: boolean } | null>(null);
 const busy = ref(false);
 const error = ref('');
 
@@ -77,7 +79,8 @@ async function finish() {
   busy.value = true;
   error.value = '';
   try {
-    settings.value = await api.updateSettings({ onboardingDone: true });
+    // A new user discovers everything here: no announcement of what is new
+    settings.value = await api.updateSettings({ onboardingDone: true, seenAnnouncements: [...ANNOUNCEMENTS] });
     router.push({ name: 'home' });
   } catch (err) {
     error.value = (err as Error).message;
@@ -181,7 +184,7 @@ const firstName = computed(() => user.value?.name.split(' ')[0] ?? '');
           Précédent
         </Button>
         <!-- A step left empty saves nothing: "Suivant" is also how to skip it -->
-        <Button class="ml-auto" :disabled="busy" @click="next">
+        <Button class="ml-auto" :disabled="busy || current?.ready === false" @click="next">
           {{ busy ? 'Enregistrement…' : last ? 'Terminer' : 'Suivant' }}
         </Button>
       </footer>

@@ -14,6 +14,7 @@ import MonthStepper from '@/components/MonthStepper.vue';
 import OptionSelect from '@/components/OptionSelect.vue';
 import SettingsDialog from '@/components/SettingsDialog.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
+import WhatsNewDialog from '@/components/WhatsNewDialog.vue';
 import OnboardingPage from '@/pages/OnboardingPage.vue';
 import SignInPage from '@/pages/SignInPage.vue';
 
@@ -99,6 +100,8 @@ watch(settingsOpen, (open) => {
     <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
     <RouterView />
+    <!-- A new feature, put forward once -->
+    <WhatsNewDialog />
   </main>
   <!-- Outside the main page: the wizard opens it too (« Gérer les catégories… ») -->
   <SettingsDialog v-if="user && settingsMounted" />

@@ -56,11 +56,11 @@ const balanceCents = computed(() => {
 const valueCents = computed(() => toCents(value.value));
 const gapCents = computed(() => (Number.isNaN(valueCents.value) ? 0 : valueCents.value - balanceCents.value));
 
+// A value and a day: the button waits for both
+const valid = computed(() => !Number.isNaN(valueCents.value) && !!date.value);
+
 async function submit() {
-  if (Number.isNaN(valueCents.value)) {
-    error.value = 'Valeur invalide';
-    return;
-  }
+  if (!valid.value) return;
   saving.value = true;
   error.value = '';
   try {
@@ -114,7 +114,7 @@ async function submit() {
 
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="saving" @click="onOpenChange(false)"> Annuler </Button>
-          <Button type="submit" :disabled="saving || !date">
+          <Button type="submit" :disabled="saving || !valid">
             {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
           </Button>
         </DialogFooter>

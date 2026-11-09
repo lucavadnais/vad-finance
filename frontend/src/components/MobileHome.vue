@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Phone home tab: the accounts card taken apart. Each part is a preview of
 // the tab it opens, with that tab's figure, small: the total and its curve
-// (the analysis), then two tiles, this month's spending against the usual (its
+// (opening the analysis page), then two tiles, this month's spending against the usual (its
 // tab) and what is left of the budget (the budget's); then each account on its
 // own tile, opening its page.
 import type { Account, Category, Projection, Transaction } from '@/types';
@@ -12,7 +12,8 @@ import { formatCents } from '@/api';
 import { useAmountsHidden } from '@/composables/useAmountsHidden';
 import { useFinanceData } from '@/composables/useFinanceData';
 import { budget, estimatedMonth } from '@/lib/budget';
-import { inTotal, recentBalance } from '@/lib/chartData';
+import { accountSeries, balanceOverTime, inTotal } from '@/lib/chartData';
+import { visibleTotal, withoutHidden } from '@/lib/savings';
 import { ACCOUNT_TYPES } from '@/lib/labels';
 import { currentMonth, monthLabel } from '@/lib/projections';
 import { dailySpending, medianRunningTotal, runningTotal, vsUsualPercent } from '@/lib/spending';
@@ -28,20 +29,26 @@ const props = defineProps<{
   projections: Projection[];
   categories: Category[];
 }>();
-const emit = defineEmits<{ open: [tab: HomeTab]; changed: []; error: [message: string] }>();
+// `open`: a tab, or the analysis (a page of its own)
+const emit = defineEmits<{ open: [view: HomeTab | 'analysis']; changed: []; error: [message: string] }>();
 
 const { amountsHidden, toggle: toggleAmounts } = useAmountsHidden();
-const totalCents = computed(() => inTotal(props.accounts).reduce((sum, a) => sum + a.balanceCents, 0));
-
-const { settings } = useFinanceData();
+// The goals hidden from the total left out (lib/savings.ts)
+const { settings, savingsGoals } = useFinanceData();
+const totalCents = computed(() => visibleTotal(props.accounts, savingsGoals.value));
 const month = currentMonth();
 const monthName = monthLabel(month).replace(/ \d+$/, '');
 
 // Under the total, opening the analysis (whose top is the same balance and
 // curve): the total balance over the last 30 days, colored by how it moved
-const recent = computed(() => recentBalance(props.transactions, inTotal(props.accounts)));
-const balance = computed(() => recent.value.values);
-const balanceChange = computed(() => recent.value.changeCents);
+const recent = computed(() => {
+  const from = new Date(Date.now() - 30 * 86_400_000);
+  const accounts = inTotal(props.accounts);
+  const rows = balanceOverTime(props.transactions, accounts, accountSeries(accounts), from);
+  return withoutHidden(rows, savingsGoals.value).map((r) => Number(r.total));
+});
+const balance = computed(() => recent.value);
+const balanceChange = computed(() => (recent.value.at(-1) ?? 0) - (recent.value[0] ?? 0));
 
 // Spending tile, opening its tab: spent so far this month, against the usual
 // spending by the same day (the median of the three months before, the gray

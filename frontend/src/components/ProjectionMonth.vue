@@ -8,13 +8,12 @@ import type { Category, Projection, Transaction } from '@/types';
 import type { Month } from '@/lib/projections';
 import { addMonths, currentMonth, monthLabel } from '@/lib/projections';
 import { defineAsyncComponent, ref } from 'vue';
-import { CalendarDays, LayoutGrid, Target } from '@lucide/vue';
+import { CalendarDays, LayoutGrid } from '@lucide/vue';
 import { api } from '@/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { BudgetFocus } from './BudgetOverview.vue';
 import BudgetOverview from './BudgetOverview.vue';
-import ComingSoon from './ComingSoon.vue';
 import ProjectionCalendar from './ProjectionCalendar.vue';
 import ProjectionDialog from './ProjectionDialog.vue';
 import ProjectionListDialog from './ProjectionListDialog.vue';
@@ -116,13 +115,6 @@ async function remove(p: Projection) {
           :transactions="transactions"
           :categories="categories"
           :focus="focus"
-        />
-
-        <!-- Coming soon: savings goals, announced where the month is planned -->
-        <ComingSoon
-          :icon="Target"
-          title="Objectifs d'épargne"
-          description="Mettre de l'argent de côté pour un projet et suivre où vous en êtes."
         />
       </template>
 

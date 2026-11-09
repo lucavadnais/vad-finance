@@ -4,7 +4,7 @@
 // "Gérer les prévisions", and the monthly buffer for unplanned spending,
 // saved on "Suivant" (submit).
 import type { Projection } from '@/types';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Plus } from '@lucide/vue';
 import { api, toCents } from '@/api';
 import { useFinanceData } from '@/composables/useFinanceData';
@@ -42,24 +42,24 @@ watch(
   { immediate: true },
 );
 
+const cents = computed(() => toCents(buffer.value || '0'));
+// "Suivant" waits for a valid margin
+const ready = computed(() => !Number.isNaN(cents.value) && cents.value >= 0);
+
 // Called on "Suivant": false keeps the wizard on this step
 async function submit() {
-  const cents = toCents(buffer.value || '0');
-  if (Number.isNaN(cents) || cents < 0) {
-    error.value = 'Marge invalide';
-    return false;
-  }
-  if (cents === settings.value.budgetBufferCents) return true;
+  if (!ready.value) return false;
+  if (cents.value === settings.value.budgetBufferCents) return true;
   error.value = '';
   try {
-    settings.value = await api.updateSettings({ budgetBufferCents: cents });
+    settings.value = await api.updateSettings({ budgetBufferCents: cents.value });
     return true;
   } catch (err) {
     error.value = (err as Error).message;
     return false;
   }
 }
-defineExpose({ submit });
+defineExpose({ submit, ready });
 </script>
 
 <template>

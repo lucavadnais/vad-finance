@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { cn } from '@/lib/utils';
+import { CHOICE_CARD } from './WizardSteps.vue';
 import AccountSelect from './AccountSelect.vue';
 
 const open = defineModel<boolean>('open', { required: true });
@@ -94,7 +96,9 @@ async function confirm() {
         <RadioGroup v-if="step === 'choose'" v-model="choice" class="gap-3">
           <Label
             for="delete-move"
-            class="flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal has-[[data-state=checked]]:border-primary has-[[data-disabled]]:cursor-not-allowed has-[[data-disabled]]:opacity-50"
+            :class="
+              cn(CHOICE_CARD, 'font-normal has-[[data-disabled]]:cursor-not-allowed has-[[data-disabled]]:opacity-50')
+            "
           >
             <RadioGroupItem id="delete-move" value="move" :disabled="targets.length === 0" class="mt-0.5" />
             <span class="flex flex-col gap-1">
@@ -112,7 +116,12 @@ async function confirm() {
           </Label>
           <Label
             for="delete-all"
-            class="flex cursor-pointer items-start gap-3 rounded-lg border p-4 font-normal has-[[data-state=checked]]:border-destructive"
+            :class="
+              cn(
+                CHOICE_CARD,
+                'font-normal has-[[data-state=checked]]:border-destructive has-[[data-state=checked]]:bg-destructive/5',
+              )
+            "
           >
             <RadioGroupItem id="delete-all" value="delete" class="mt-0.5" />
             <span class="flex flex-col gap-1">

@@ -12,6 +12,7 @@ import transactionsRouter from './routes/transactions.js';
 import transfersRouter from './routes/transfers.js';
 import duplicatesRouter from './routes/duplicates.js';
 import projectionsRouter from './routes/projections.js';
+import savingsGoalsRouter from './routes/savingsGoals.js';
 import settingsRouter from './routes/settings.js';
 import usersRouter from './routes/users.js';
 
@@ -36,6 +37,7 @@ app.use('/api/transactions', transactionsRouter);
 app.use('/api/transfers', transfersRouter);
 app.use('/api/duplicates', duplicatesRouter);
 app.use('/api/projections', projectionsRouter);
+app.use('/api/savings-goals', savingsGoalsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Route introuvable' }));
@@ -86,5 +88,6 @@ app.use((err, req, res, next) => {
 
 const port = process.env.PORT || 3000;
 
-await connectDb(process.env.MONGO_URL);
+// Local mongo container unless .env sets MONGO_URL (e.g. MongoDB Atlas)
+await connectDb(process.env.MONGO_URL || 'mongodb://mongo:27017/finance');
 app.listen(port, () => console.log(`API listening on port ${port}`));

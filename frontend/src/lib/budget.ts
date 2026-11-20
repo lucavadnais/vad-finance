@@ -2,7 +2,7 @@
 // positive: an expense row adds up money going out, an income row money coming in.
 import type { Category, CategoryKind, Projection, Transaction } from '@/types';
 import type { Month } from './projections';
-import { occurrences, sameMonth } from './projections';
+import { occurrences, sameMonth, todayUTC } from './projections';
 
 // One forecast inside a row, with the days it lands on this month
 export interface BudgetForecast {
@@ -46,7 +46,7 @@ export function budget(
   m: Month,
   now = new Date(),
 ): Budget {
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const today = todayUTC(now);
   const byCategory = new Map(categories.map((c) => [c._id, c]));
   const rows = new Map<string, BudgetRow>();
   const row = (key: string, init: () => Omit<BudgetRow, 'plannedCents' | 'dueCents' | 'actualCents' | 'forecasts'>) => {

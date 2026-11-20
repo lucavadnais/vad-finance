@@ -1,6 +1,7 @@
 // Aggregations behind the dashboard charts. Everything is in cents.
 import type { Account, Category, CategoryGroup, Transaction } from '@/types';
 import { NO_COLOR } from './colors';
+import { todayUTC } from './projections';
 
 export type Period = 'week' | 'month' | '3m' | '6m' | '12m' | 'year' | 'all';
 
@@ -34,10 +35,11 @@ export const OTHER_KEY = 'other';
 
 // First day (UTC) of the period, or null for all time
 export function periodStart(period: Period, now = new Date()): Date | null {
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
+  // The user's calendar day, not the UTC one (see todayUTC)
+  const y = now.getFullYear();
+  const m = now.getMonth();
   // Weeks start on Monday, like the weekly chart
-  if (period === 'week') return new Date(Date.UTC(y, m, now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+  if (period === 'week') return new Date(Date.UTC(y, m, now.getDate() - ((now.getDay() + 6) % 7)));
   if (period === 'month') return new Date(Date.UTC(y, m, 1));
   if (period === '3m') return new Date(Date.UTC(y, m - 2, 1));
   if (period === '6m') return new Date(Date.UTC(y, m - 5, 1));
@@ -247,7 +249,7 @@ export function balanceOverTime(
     const next = sorted[i + 1];
     if (!next || Date.parse(next.date) !== t) rows.push(snapshot(t));
   }
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const today = todayUTC(now);
   if (rows.length > 0 && rows[rows.length - 1].t < today) rows.push(snapshot(today));
   return rows;
 }

@@ -6,8 +6,14 @@ import { RECURRENCE_UNITS } from '@/lib/labels';
 // A month, as its first day at midnight UTC (like the transactions' dates)
 export type Month = { year: number; month: number }; // month: 0-11
 
+// Today, the user's calendar day (their time zone), at midnight UTC like the
+// transactions' dates: in Québec from 19 h (20 h in summer) the UTC day is
+// already tomorrow, which made a pay due tomorrow count as late.
+export const todayUTC = (now = new Date()) => Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+
+// This month, the user's calendar month
 export function currentMonth(now = new Date()): Month {
-  return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
+  return { year: now.getFullYear(), month: now.getMonth() };
 }
 
 export function addMonths({ year, month }: Month, n: number): Month {
@@ -60,7 +66,7 @@ export function landingDays(p: Projection, m: Month): number[] {
 // Next day it lands on from `from` (today), as 'YYYY-MM-DD', looking up to 10
 // years ahead; null if it never lands again
 export function nextDate(p: Projection, from = new Date()): string | null {
-  const today = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  const today = todayUTC(from);
   let m = currentMonth(from);
   for (let i = 0; i < 120; i++, m = addMonths(m, 1)) {
     const day = landingDays(p, m).find((d) => Date.UTC(m.year, m.month, d) >= today);

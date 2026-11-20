@@ -141,9 +141,16 @@ export function computedFundTarget(
   return settings.fundMonths * essentialMonthlyCents + reserves;
 }
 
+// The fund's months of essential spending: its situation's, from the table,
+// else the months typed in (no situation). The situation wins over the saved
+// `fundMonths`, the way EmergencyFundDialog shows it, so the card and the
+// dialog never disagree when the two are out of step.
+export const fundMonthsOf = (fund: Pick<SavingsGoal, 'fundSituation' | 'fundMonths'>) =>
+  FUND_SITUATIONS.find((s) => s.key === fund.fundSituation)?.months ?? fund.fundMonths;
+
 // The fund's target: the amount picked, else the computed one
 export const fundTarget = (fund: SavingsGoal, essentialMonthlyCents: number | null) =>
-  fund.targetCents ?? computedFundTarget(fund, essentialMonthlyCents);
+  fund.targetCents ?? computedFundTarget({ ...fund, fundMonths: fundMonthsOf(fund) }, essentialMonthlyCents);
 export const SAVINGS_RATE_TARGET = 0.2;
 
 // Essential: its group ticked in `essentials` (the fund's), itself without one
